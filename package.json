@@ -1,0 +1,16 @@
+{
+    "name": "coursekit",
+    "private": true,
+    "packageManager": "bun@1.2.23",
+    "workspaces": ["packages/*", "examples/*"],
+    "devDependencies": {
+        "turbo": "^2.0.0"
+    },
+    "scripts": {
+        "build": "turbo build",
+        "dev": "turbo dev",
+        "lint": "turbo lint",
+        "typecheck": "turbo typecheck",
+        "test": "turbo test"
+    }
+}

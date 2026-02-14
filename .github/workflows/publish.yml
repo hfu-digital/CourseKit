@@ -1,0 +1,26 @@
+name: Publish Packages
+on:
+    push:
+        tags: ['v*']
+
+jobs:
+    publish:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+            - uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
+            - run: bun install --frozen-lockfile
+            - run: bunx turbo build
+            - run: bunx turbo test
+            - name: Publish Backend
+              working-directory: packages/backend
+              run: bun publish --access public
+              env:
+                  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+            - name: Publish Frontend
+              working-directory: packages/frontend
+              run: bun publish --access public
+              env:
+                  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
