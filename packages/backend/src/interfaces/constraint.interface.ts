@@ -1,4 +1,7 @@
-import type { TimetableEvent, MaterializedOccurrence, Conflict, DateRange } from './types.js';
+import type {
+    TimetableEvent, MaterializedOccurrence, Conflict, DateRange,
+    Room, Availability, AvailabilityEntityType,
+} from './types.js';
 
 /**
  * A constraint rule that the conflict detection engine evaluates.
@@ -27,4 +30,15 @@ export interface ConstraintContext {
     /** Lookup helpers injected by the conflict service */
     getInstructorsForEvent: (eventId: string) => Promise<string[]>;
     getGroupsForEvent: (eventId: string) => Promise<string[]>;
+    /** Get room details by ID */
+    getRoomById: (roomId: string) => Promise<Room | null>;
+    /** Get the student count for a group */
+    getGroupStudentCount: (groupId: string) => Promise<number>;
+    /** Check if an entity is available at a given time */
+    isEntityAvailable: (
+        entityType: AvailabilityEntityType,
+        entityId: string,
+        start: Date,
+        durationMin: number,
+    ) => Promise<{ available: boolean; conflicts: Availability[] }>;
 }

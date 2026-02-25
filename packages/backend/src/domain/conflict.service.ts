@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { TimetableEventStorage } from '../interfaces/event-storage.interface.js';
+import { RoomStorage } from '../interfaces/room-storage.interface.js';
+import { GroupStorage } from '../interfaces/group-storage.interface.js';
 import { TimeService } from './time.service.js';
 import { AvailabilityService } from './availability.service.js';
 import { RecurrenceService } from './recurrence.service.js';
@@ -16,6 +18,8 @@ export class ConflictService {
         private readonly time: TimeService,
         private readonly availability: AvailabilityService,
         private readonly eventStorage: TimetableEventStorage,
+        private readonly roomStorage: RoomStorage,
+        private readonly groupStorage: GroupStorage,
         private readonly recurrence: RecurrenceService,
         private readonly eventEmitter: EventEmitter2,
         @Inject('SCHEDULE_CONSTRAINTS') private readonly constraints: ScheduleConstraint[],
@@ -38,18 +42,7 @@ export class ConflictService {
         }
 
         // Build the constraint context
-        const context: ConstraintContext = {
-            dateRange,
-            allEvents,
-            getInstructorsForEvent: async (eventId: string) => {
-                const instructors = await this.eventStorage.findInstructors(eventId);
-                return instructors.map(i => i.instructorId);
-            },
-            getGroupsForEvent: async (eventId: string) => {
-                const groups = await this.eventStorage.findGroups(eventId);
-                return groups.map(g => g.groupId);
-            },
-        };
+        const context = this.buildContext(dateRange, allEvents);
 
         // Evaluate all constraints
         const allConflicts: Conflict[] = [];
@@ -108,19 +101,17 @@ export class ConflictService {
             }
         }
 
-        // Build the constraint context
+        // Build the constraint context (with dry-run overrides for the temp event)
+        const baseContext = this.buildContext(dateRange, allEvents);
         const context: ConstraintContext = {
-            dateRange,
-            allEvents,
+            ...baseContext,
             getInstructorsForEvent: async (eventId: string) => {
                 if (eventId === tempEvent.id) return [];
-                const instructors = await this.eventStorage.findInstructors(eventId);
-                return instructors.map(i => i.instructorId);
+                return baseContext.getInstructorsForEvent(eventId);
             },
             getGroupsForEvent: async (eventId: string) => {
                 if (eventId === tempEvent.id) return [];
-                const groups = await this.eventStorage.findGroups(eventId);
-                return groups.map(g => g.groupId);
+                return baseContext.getGroupsForEvent(eventId);
             },
         };
 
@@ -135,6 +126,31 @@ export class ConflictService {
             hasErrors: allConflicts.some(c => c.severity === 'error'),
             hasWarnings: allConflicts.some(c => c.severity === 'warning'),
             conflicts: allConflicts,
+        };
+    }
+
+    private buildContext(dateRange: DateRange, allEvents: TimetableEvent[]): ConstraintContext {
+        return {
+            dateRange,
+            allEvents,
+            getInstructorsForEvent: async (eventId: string) => {
+                const instructors = await this.eventStorage.findInstructors(eventId);
+                return instructors.map(i => i.instructorId);
+            },
+            getGroupsForEvent: async (eventId: string) => {
+                const groups = await this.eventStorage.findGroups(eventId);
+                return groups.map(g => g.groupId);
+            },
+            getRoomById: async (roomId: string) => {
+                return this.roomStorage.findById(roomId);
+            },
+            getGroupStudentCount: async (groupId: string) => {
+                const students = await this.groupStorage.findStudents(groupId);
+                return students.length;
+            },
+            isEntityAvailable: async (entityType, entityId, start, durationMin) => {
+                return this.availability.isAvailable(entityType, entityId, start, durationMin);
+            },
         };
     }
 }

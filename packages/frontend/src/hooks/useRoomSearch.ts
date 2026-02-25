@@ -64,7 +64,7 @@ export function useRoomSearch(initialQuery?: RoomSearchQuery): UseRoomSearchResu
         if (initialQuery) {
             search(initialQuery);
         }
-    }, []);
+    }, [search, initialQuery]);
 
     return { rooms, loading, error, search };
 }
