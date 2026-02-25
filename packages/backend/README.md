@@ -1,13 +1,13 @@
-# @coursekit/nestjs
+# @hfu.digital/coursekit-nestjs
 
 Timetable engine for academic scheduling: recurring events, conflict detection, availability management, and a pluggable constraint system. Ships as a NestJS dynamic module with storage adapters for any ORM.
 
-Part of [CourseKit](https://github.com/hfu-digital/CourseKit) — see the monorepo for the React frontend (`@coursekit/react`).
+Part of [CourseKit](https://github.com/hfu-digital/CourseKit) — see the monorepo for the React frontend (`@hfu.digital/coursekit-react`).
 
 ## Installation
 
 ```bash
-bun add @coursekit/nestjs
+bun add @hfu.digital/coursekit-nestjs
 ```
 
 Peer dependencies:
@@ -31,7 +31,7 @@ import {
     PrismaAcademicPeriodAdapter,
     PrismaCourseAdapter,
     PrismaLocationDistanceAdapter,
-} from '@coursekit/nestjs';
+} from '@hfu.digital/coursekit-nestjs';
 
 const prisma = new PrismaClient();
 
@@ -83,7 +83,7 @@ The backend uses a hexagonal architecture — all persistence is behind abstract
 
 ## Testing
 
-Use `@coursekit/nestjs/testing` for in-memory adapters and test utilities:
+Use `@hfu.digital/coursekit-nestjs/testing` for in-memory adapters and test utilities:
 
 ```typescript
 import {
@@ -92,7 +92,7 @@ import {
     createTestEvent,
     createTestRoom,
     expectNoConflicts,
-} from '@coursekit/nestjs/testing';
+} from '@hfu.digital/coursekit-nestjs/testing';
 ```
 
 ## License

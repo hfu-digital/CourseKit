@@ -1,5 +1,5 @@
 {
-    "name": "@coursekit/example-nestjs-basic",
+    "name": "@hfu.digital/coursekit-example-nestjs-basic",
     "version": "0.0.0",
     "private": true,
     "type": "module",
@@ -8,7 +8,7 @@
         "build": "echo 'No build step for example'"
     },
     "dependencies": {
-        "@coursekit/nestjs": "workspace:*",
+        "@hfu.digital/coursekit-nestjs": "workspace:*",
         "@nestjs/common": "^11.0.0",
         "@nestjs/core": "^11.0.0",
         "@nestjs/event-emitter": "^3.0.0",

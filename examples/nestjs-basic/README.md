@@ -1,6 +1,6 @@
 # CourseKit NestJS Basic Example
 
-Minimal NestJS application demonstrating `@coursekit/nestjs` with in-memory storage adapters.
+Minimal NestJS application demonstrating `@hfu.digital/coursekit-nestjs` with in-memory storage adapters.
 
 ## Running
 

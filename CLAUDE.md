@@ -5,8 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What is CourseKit
 
 A timetable engine for academic scheduling, published as two npm packages:
-- **`@coursekit/nestjs`** (`packages/backend/`) — NestJS module with domain services, storage adapters, and constraint system
-- **`@coursekit/react`** (`packages/frontend/`) — React hooks and components for timetable UI
+- **`@hfu.digital/coursekit-nestjs`** (`packages/backend/`) — NestJS module with domain services, storage adapters, and constraint system
+- **`@hfu.digital/coursekit-react`** (`packages/frontend/`) — React hooks and components for timetable UI
 
 ## Development Commands
 
@@ -87,7 +87,7 @@ React context provider (`CourseKitProvider`) accepts `apiUrl` and optional custo
 
 ## Testing
 
-Backend tests use `bun:test` with in-memory storage adapters — no database required. Test utilities are exported from `@coursekit/nestjs/testing`:
+Backend tests use `bun:test` with in-memory storage adapters — no database required. Test utilities are exported from `@hfu.digital/coursekit-nestjs/testing`:
 - **Factories**: `createTestEvent()`, `createTestRoom()`, `createTestInstructor()`, etc.
 - **Fixtures**: `simpleSchoolWeek`, `universitySemester`, `edgeCaseSchedule`
 - **Helpers**: `EventSpy` for domain event assertions, `expectNoConflicts()`, `expectConflict()`

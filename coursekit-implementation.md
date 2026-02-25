@@ -13,8 +13,8 @@ These are locked. Do not re-ask the user about them.
 | Decision | Value |
 |----------|-------|
 | npm scope | `@coursekit` |
-| Backend package | `@coursekit/nestjs` |
-| Frontend package | `@coursekit/react` |
+| Backend package | `@hfu.digital/coursekit-nestjs` |
+| Frontend package | `@hfu.digital/coursekit-react` |
 | Monorepo name | `coursekit` |
 | Runtime | **Bun-only** (no Node/CommonJS output) |
 | Build: JS output | `bun build --target=bun` |
@@ -151,7 +151,7 @@ save = true
 
 ```json
 {
-  "name": "@coursekit/nestjs",
+  "name": "@hfu.digital/coursekit-nestjs",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
@@ -232,7 +232,7 @@ save = true
 
 ```json
 {
-  "name": "@coursekit/react",
+  "name": "@hfu.digital/coursekit-react",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
@@ -1125,7 +1125,7 @@ export class PrismaTimetableEventAdapter extends TimetableEventStorage {
 ```typescript
 // In the host app's module:
 import { PrismaClient } from '@prisma/client';
-import { CourseKitModule, PrismaTimetableEventAdapter, PrismaRoomAdapter /* ... */ } from '@coursekit/nestjs';
+import { CourseKitModule, PrismaTimetableEventAdapter, PrismaRoomAdapter /* ... */ } from '@hfu.digital/coursekit-nestjs';
 
 const prisma = new PrismaClient();
 
@@ -1382,7 +1382,7 @@ export { expectNoConflicts, expectConflict } from './assertions.js';
 
 ## Phase 6 — Frontend Package (Tier 2)
 
-**Goal:** Ship `@coursekit/react` with a provider, headless hooks, and minimal components.
+**Goal:** Ship `@hfu.digital/coursekit-react` with a provider, headless hooks, and minimal components.
 
 ### 6.1 `packages/frontend/src/context/CourseKitProvider.tsx`
 
@@ -1458,16 +1458,16 @@ export { AvailabilityOverlay } from './components/AvailabilityOverlay.js';
 
 ### 7.1 README sections (in order)
 
-1. **Overview** — "A timetable engine for academic scheduling: recurring events, conflict detection, availability management, and a React frontend. Ships as `@coursekit/nestjs` + `@coursekit/react`."
+1. **Overview** — "A timetable engine for academic scheduling: recurring events, conflict detection, availability management, and a React frontend. Ships as `@hfu.digital/coursekit-nestjs` + `@hfu.digital/coursekit-react`."
 2. **Prerequisites** — Bun ≥ 1.0, NestJS ≥ 10, React ≥ 18
-3. **Installation** — `bun add @coursekit/nestjs @coursekit/react`
+3. **Installation** — `bun add @hfu.digital/coursekit-nestjs @hfu.digital/coursekit-react`
 4. **Prisma Schema Reference** — The full schema from the feature plan (copy the `model` blocks verbatim)
 5. **Backend Integration** — `CourseKitModule.register()` example with all Prisma adapters
 6. **Frontend Integration** — `<CourseKitProvider>` setup + hook examples
 7. **Custom Adapter Guide** — How to implement storage interfaces for TypeORM/Drizzle/Knex
 8. **Built-in Constraints** — What ships out of the box, how to add custom ones
 9. **RRULE Examples** — Common recurrence patterns for academic scheduling
-10. **Testing** — How to use the `@coursekit/nestjs/testing` subpath
+10. **Testing** — How to use the `@hfu.digital/coursekit-nestjs/testing` subpath
 11. **API Reference** — Key exports, service methods, types
 12. **Development** — `bun install` → `bun run build` → `bun run dev`
 

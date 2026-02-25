@@ -1,6 +1,6 @@
 # CourseKit
 
-A timetable engine for academic scheduling: recurring events, conflict detection, availability management, and a React frontend. Ships as `@coursekit/nestjs` + `@coursekit/react`.
+A timetable engine for academic scheduling: recurring events, conflict detection, availability management, and a React frontend. Ships as `@hfu.digital/coursekit-nestjs` + `@hfu.digital/coursekit-react`.
 
 ## Prerequisites
 
@@ -12,19 +12,19 @@ A timetable engine for academic scheduling: recurring events, conflict detection
 
 ```bash
 # Backend
-bun add @coursekit/nestjs
+bun add @hfu.digital/coursekit-nestjs
 
 # Frontend
-bun add @coursekit/react
+bun add @hfu.digital/coursekit-react
 ```
 
 Peer dependencies you need in your project:
 
 ```bash
-# For @coursekit/nestjs
+# For @hfu.digital/coursekit-nestjs
 bun add @nestjs/common @nestjs/core @nestjs/event-emitter rxjs class-validator class-transformer
 
-# For @coursekit/react
+# For @hfu.digital/coursekit-react
 bun add react react-dom
 ```
 
@@ -200,7 +200,7 @@ import {
     PrismaAcademicPeriodAdapter,
     PrismaCourseAdapter,
     PrismaLocationDistanceAdapter,
-} from '@coursekit/nestjs';
+} from '@hfu.digital/coursekit-nestjs';
 
 const prisma = new PrismaClient();
 
@@ -230,7 +230,7 @@ export class AppModule {}
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { QueryService, RecurrenceService, ConflictService } from '@coursekit/nestjs';
+import { QueryService, RecurrenceService, ConflictService } from '@hfu.digital/coursekit-nestjs';
 
 @Injectable()
 export class TimetableController {
@@ -255,7 +255,7 @@ export class TimetableController {
 
 ```typescript
 import { OnEvent } from '@nestjs/event-emitter';
-import { DOMAIN_EVENTS, type EventCreatedPayload } from '@coursekit/nestjs';
+import { DOMAIN_EVENTS, type EventCreatedPayload } from '@hfu.digital/coursekit-nestjs';
 
 @Injectable()
 export class NotificationService {
@@ -276,7 +276,7 @@ export class NotificationService {
 ### Provider Setup
 
 ```tsx
-import { CourseKitProvider } from '@coursekit/react';
+import { CourseKitProvider } from '@hfu.digital/coursekit-react';
 
 function App() {
     return (
@@ -296,7 +296,7 @@ function App() {
 ### Using Hooks
 
 ```tsx
-import { useTimetable, useConflictCheck, TimetableGrid, EventCard } from '@coursekit/react';
+import { useTimetable, useConflictCheck, TimetableGrid, EventCard } from '@hfu.digital/coursekit-react';
 
 function MySchedule() {
     const { data, loading } = useTimetable({
@@ -328,8 +328,8 @@ function MySchedule() {
 To use a different ORM (TypeORM, Drizzle, Knex, etc.), implement the abstract storage classes:
 
 ```typescript
-import { TimetableEventStorage } from '@coursekit/nestjs';
-import type { TimetableEvent, ScheduleQuery } from '@coursekit/nestjs';
+import { TimetableEventStorage } from '@hfu.digital/coursekit-nestjs';
+import type { TimetableEvent, ScheduleQuery } from '@hfu.digital/coursekit-nestjs';
 
 export class DrizzleTimetableEventAdapter extends TimetableEventStorage {
     constructor(private readonly db: DrizzleDB) { super(); }
@@ -358,8 +358,8 @@ export class DrizzleTimetableEventAdapter extends TimetableEventStorage {
 ### Custom Constraints
 
 ```typescript
-import { ScheduleConstraint, type ConstraintContext } from '@coursekit/nestjs';
-import type { MaterializedOccurrence, Conflict } from '@coursekit/nestjs';
+import { ScheduleConstraint, type ConstraintContext } from '@hfu.digital/coursekit-nestjs';
+import type { MaterializedOccurrence, Conflict } from '@hfu.digital/coursekit-nestjs';
 
 export class MinBreakConstraint extends ScheduleConstraint {
     readonly type = 'min-break';
@@ -401,11 +401,11 @@ Common recurrence patterns for academic scheduling:
 
 ## Testing
 
-Use the `@coursekit/nestjs/testing` subpath for in-memory testing:
+Use the `@hfu.digital/coursekit-nestjs/testing` subpath for in-memory testing:
 
 ```typescript
 import { Test } from '@nestjs/testing';
-import { CourseKitModule } from '@coursekit/nestjs';
+import { CourseKitModule } from '@hfu.digital/coursekit-nestjs';
 import {
     InMemoryTimetableEventStorage,
     InMemoryRoomStorage,
@@ -418,7 +418,7 @@ import {
     createTestRoom,
     expectNoConflicts,
     expectConflict,
-} from '@coursekit/nestjs/testing';
+} from '@hfu.digital/coursekit-nestjs/testing';
 
 describe('Schedule', () => {
     it('should detect double-booking', async () => {

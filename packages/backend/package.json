@@ -1,5 +1,5 @@
 {
-    "name": "@coursekit/nestjs",
+    "name": "@hfu.digital/coursekit-nestjs",
     "version": "1.0.0",
     "description": "Timetable engine for academic scheduling — recurring events, conflict detection, and availability management as a NestJS module",
     "license": "MIT",
@@ -28,6 +28,10 @@
         }
     },
     "files": ["dist"],
+    "publishConfig": {
+        "access": "public",
+        "registry": "https://registry.npmjs.org/"
+    },
     "scripts": {
         "build": "bun run build:js && bun run build:types",
         "build:js": "bun build src/index.ts src/testing/index.ts --outdir dist --target bun --splitting --format esm --external @nestjs/common --external @nestjs/core --external @nestjs/event-emitter --external @nestjs/testing --external rxjs --external class-validator --external class-transformer --external reflect-metadata",

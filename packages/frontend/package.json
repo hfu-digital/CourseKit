@@ -1,5 +1,5 @@
 {
-    "name": "@coursekit/react",
+    "name": "@hfu.digital/coursekit-react",
     "version": "1.0.0",
     "description": "React hooks and components for academic timetable UI — schedule grids, conflict badges, and availability overlays",
     "license": "MIT",
@@ -19,6 +19,10 @@
     "module": "dist/index.es.js",
     "types": "dist/index.d.ts",
     "files": ["dist"],
+    "publishConfig": {
+        "access": "public",
+        "registry": "https://registry.npmjs.org/"
+    },
     "scripts": {
         "build": "bunx vite build",
         "dev": "bunx vite build --watch",

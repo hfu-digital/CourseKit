@@ -5,7 +5,7 @@ import {
     ConflictService,
     TimetableEventStorage,
     RoomStorage,
-} from '@coursekit/nestjs';
+} from '@hfu.digital/coursekit-nestjs';
 
 @Injectable()
 export class DemoService {
