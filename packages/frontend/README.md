@@ -1,13 +1,13 @@
-# @coursekit/react
+# @hfu.digital/coursekit-react
 
-React hooks and components for academic timetable UI — schedule grids, conflict badges, and availability overlays. Designed to work with `@coursekit/nestjs` backend.
+React hooks and components for academic timetable UI — schedule grids, conflict badges, and availability overlays. Designed to work with `@hfu.digital/coursekit-nestjs` backend.
 
-Part of [CourseKit](https://github.com/hfu-digital/CourseKit) — see the monorepo for the NestJS backend (`@coursekit/nestjs`).
+Part of [CourseKit](https://github.com/hfu-digital/CourseKit) — see the monorepo for the NestJS backend (`@hfu.digital/coursekit-nestjs`).
 
 ## Installation
 
 ```bash
-bun add @coursekit/react
+bun add @hfu.digital/coursekit-react
 ```
 
 Peer dependencies:
@@ -19,7 +19,7 @@ bun add react react-dom
 ## Quick Start
 
 ```tsx
-import { CourseKitProvider, useTimetable, TimetableGrid, EventCard } from '@coursekit/react';
+import { CourseKitProvider, useTimetable, TimetableGrid, EventCard } from '@hfu.digital/coursekit-react';
 
 function App() {
     return (

@@ -1,5 +1,5 @@
 {
-    "name": "@coursekit/nestjs",
+    "name": "@hfu.digital/coursekit-nestjs",
     "version": "1.0.0",
     "description": "Timetable engine for academic scheduling — recurring events, conflict detection, and availability management as a NestJS module",
     "license": "MIT",

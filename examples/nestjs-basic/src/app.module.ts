@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { CourseKitModule } from '@coursekit/nestjs';
+import { CourseKitModule } from '@hfu.digital/coursekit-nestjs';
 import {
     InMemoryTimetableEventStorage,
     InMemoryRoomStorage,
@@ -8,7 +8,7 @@ import {
     InMemoryAvailabilityStorage,
     InMemoryAcademicPeriodStorage,
     InMemoryCourseStorage,
-} from '@coursekit/nestjs/testing';
+} from '@hfu.digital/coursekit-nestjs/testing';
 import { DemoService } from './demo.service.js';
 
 @Module({

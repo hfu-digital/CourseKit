@@ -1,5 +1,5 @@
 {
-    "name": "@coursekit/react",
+    "name": "@hfu.digital/coursekit-react",
     "version": "1.0.0",
     "description": "React hooks and components for academic timetable UI — schedule grids, conflict badges, and availability overlays",
     "license": "MIT",
