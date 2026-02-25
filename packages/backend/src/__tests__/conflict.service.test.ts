@@ -41,6 +41,9 @@ describe('OverlapConstraint', () => {
             allEvents: [event1, event2],
             getInstructorsForEvent: async () => [],
             getGroupsForEvent: async () => [],
+            getRoomById: async () => null,
+            getGroupStudentCount: async () => 0,
+            isEntityAvailable: async () => ({ available: true, conflicts: [] }),
         };
 
         const conflicts = await constraint.evaluate(occurrences, context);
@@ -72,6 +75,9 @@ describe('OverlapConstraint', () => {
                 return [instructorId];
             },
             getGroupsForEvent: async () => [],
+            getRoomById: async () => null,
+            getGroupStudentCount: async () => 0,
+            isEntityAvailable: async () => ({ available: true, conflicts: [] }),
         };
 
         const conflicts = await constraint.evaluate(occurrences, context);
@@ -99,6 +105,9 @@ describe('OverlapConstraint', () => {
             allEvents: [event1, event2],
             getInstructorsForEvent: async () => [],
             getGroupsForEvent: async () => [],
+            getRoomById: async () => null,
+            getGroupStudentCount: async () => 0,
+            isEntityAvailable: async () => ({ available: true, conflicts: [] }),
         };
 
         const conflicts = await constraint.evaluate(occurrences, context);

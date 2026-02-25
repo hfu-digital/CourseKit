@@ -1,6 +1,19 @@
 {
     "name": "@coursekit/nestjs",
-    "version": "0.1.0",
+    "version": "1.0.0",
+    "description": "Timetable engine for academic scheduling — recurring events, conflict detection, and availability management as a NestJS module",
+    "license": "MIT",
+    "author": "hfu-digital",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/hfu-digital/CourseKit",
+        "directory": "packages/backend"
+    },
+    "homepage": "https://github.com/hfu-digital/CourseKit#readme",
+    "bugs": {
+        "url": "https://github.com/hfu-digital/CourseKit/issues"
+    },
+    "keywords": ["timetable", "scheduling", "nestjs", "academic", "recurrence", "conflict-detection", "availability", "coursekit"],
     "type": "module",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",

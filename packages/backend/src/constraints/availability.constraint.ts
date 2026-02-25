@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ScheduleConstraint } from '../interfaces/constraint.interface.js';
 import type { ConstraintContext } from '../interfaces/constraint.interface.js';
-import type { MaterializedOccurrence, Conflict } from '../interfaces/types.js';
+import type { MaterializedOccurrence, Conflict, AvailabilityEntityType } from '../interfaces/types.js';
 
 @Injectable()
 export class AvailabilityConstraint extends ScheduleConstraint {
@@ -15,24 +15,44 @@ export class AvailabilityConstraint extends ScheduleConstraint {
         const conflicts: Conflict[] = [];
 
         for (const occ of occurrences) {
-            // Check if any availability blocks are noted in metadata
-            const availabilityBlocks = occ.metadata?.availabilityBlocks as
-                Array<{ entityType: string; entityId: string; hardness: string }> | undefined;
+            const entitiesToCheck: Array<{ type: AvailabilityEntityType; id: string }> = [];
 
-            if (availabilityBlocks) {
-                for (const block of availabilityBlocks) {
-                    conflicts.push({
-                        id: `availability-${block.entityId}-${occ.eventId}-${occ.occurrenceDate.getTime()}`,
-                        type: 'availability-violation',
-                        severity: block.hardness === 'hard' ? 'error' : 'warning',
-                        message: `${block.entityType} ${block.entityId} is marked as blocked during event ${occ.eventId}`,
-                        involvedEventIds: [occ.eventId],
-                        involvedEntityIds: [block.entityId],
-                        metadata: {
-                            entityType: block.entityType,
-                            hardness: block.hardness,
-                        },
-                    });
+            // Check room availability
+            if (occ.roomId) {
+                entitiesToCheck.push({ type: 'room', id: occ.roomId });
+            }
+
+            // Check instructor availability
+            const instructorIds = await context.getInstructorsForEvent(occ.eventId);
+            for (const instructorId of instructorIds) {
+                entitiesToCheck.push({ type: 'instructor', id: instructorId });
+            }
+
+            for (const entity of entitiesToCheck) {
+                const result = await context.isEntityAvailable(
+                    entity.type,
+                    entity.id,
+                    occ.startTime,
+                    occ.durationMin,
+                );
+
+                if (!result.available) {
+                    for (const block of result.conflicts) {
+                        conflicts.push({
+                            id: `availability-${entity.id}-${occ.eventId}-${occ.occurrenceDate.getTime()}`,
+                            type: 'availability-violation',
+                            severity: block.hardness === 'hard' ? 'error' : 'warning',
+                            message: `${entity.type} ${entity.id} is blocked during event ${occ.eventId}`,
+                            involvedEventIds: [occ.eventId],
+                            involvedEntityIds: [entity.id],
+                            metadata: {
+                                entityType: entity.type,
+                                hardness: block.hardness,
+                                blockStart: block.startTime.toISOString(),
+                                blockEnd: block.endTime.toISOString(),
+                            },
+                        });
+                    }
                 }
             }
         }

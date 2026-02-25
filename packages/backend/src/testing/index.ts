@@ -6,6 +6,7 @@ export { InMemoryGroupStorage } from './memory-group-storage.adapter.js';
 export { InMemoryAvailabilityStorage } from './memory-availability-storage.adapter.js';
 export { InMemoryAcademicPeriodStorage } from './memory-period-storage.adapter.js';
 export { InMemoryCourseStorage } from './memory-course-storage.adapter.js';
+export { InMemoryLocationDistanceStorage } from './memory-location-distance-storage.adapter.js';
 
 // Factories
 export {
