@@ -66,11 +66,11 @@ jobs:
         runs-on: ubuntu-latest
         permissions:
             contents: write
-            workflows: write
         steps:
             - uses: actions/checkout@v4
               with:
                   fetch-depth: 0
+                  token: ${{ secrets.GH_PAT }}
 
             - name: Push to prod branch
               run: |
