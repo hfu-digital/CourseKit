@@ -24,4 +24,10 @@ export class TimeService {
     gapMinutes(endOfFirst: Date, startOfSecond: Date): number {
         return (startOfSecond.getTime() - endOfFirst.getTime()) / 60_000;
     }
+
+    /** Parse an "HH:MM" time string into total minutes since midnight */
+    timeToMinutes(time: string): number {
+        const [hours, minutes] = time.split(':').map(Number);
+        return hours * 60 + minutes;
+    }
 }
