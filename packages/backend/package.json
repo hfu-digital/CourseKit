@@ -37,10 +37,8 @@
         "registry": "https://registry.npmjs.org/"
     },
     "scripts": {
-        "build": "bun run build:js && bun run build:types",
-        "build:js": "bun build src/index.ts src/testing/index.ts --outdir dist --target bun --splitting --format esm --external @nestjs/common --external @nestjs/core --external @nestjs/event-emitter --external @nestjs/testing --external rxjs --external class-validator --external class-transformer --external reflect-metadata",
-        "build:types": "tsc --emitDeclarationOnly --outDir dist",
-        "dev": "bun run build --watch",
+        "build": "tsc --outDir dist",
+        "dev": "tsc --outDir dist --watch",
         "typecheck": "tsc --noEmit",
         "test": "bun test",
         "prepublishOnly": "bun run build"
