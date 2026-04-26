@@ -21,13 +21,3 @@ export {
     getEventHeight,
     type StudyBlock,
 } from './utils/hfu-blocks.js';
-
-// SPlan course deduplication utilities
-export {
-    deduplicateProgramCourses,
-    deduplicateTeacherCourses,
-    type RawSplanCourse,
-    type CourseSchedule,
-    type DedupedCourse,
-    type DedupedTeacherCourse,
-} from './utils/splan-dedup.js';

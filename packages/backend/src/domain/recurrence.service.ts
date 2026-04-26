@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { RRule, RRuleSet, rrulestr } from 'rrule';
+import type { RRule as RRuleType } from 'rrule';
+import * as rruleModule from 'rrule';
+
+// CJS/ESM interop: rrule is a UMD bundle without an exports map,
+// so Node.js ESM can't resolve named exports directly
+const rruleNs = ('default' in rruleModule ? (rruleModule as any).default : rruleModule) as typeof rruleModule;
+const { RRule, RRuleSet, rrulestr } = rruleNs;
 import type { TimetableEvent, EventException, MaterializedOccurrence, DateRange } from '../interfaces/types.js';
 
 @Injectable()
@@ -8,7 +14,7 @@ export class RecurrenceService {
      * Parse an RRULE string into an RRule instance.
      * Throws if the string is invalid.
      */
-    parseRule(rruleString: string, dtstart: Date): RRule {
+    parseRule(rruleString: string, dtstart: Date): RRuleType {
         const options = RRule.parseString(rruleString);
         options.dtstart = dtstart;
         return new RRule(options);
