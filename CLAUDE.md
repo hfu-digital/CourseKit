@@ -15,10 +15,10 @@ A timetable engine for academic scheduling, published as multiple npm packages:
 
 ```bash
 bun install              # Install all workspace deps
-bun run build            # Build both packages (via Turborepo)
-bun run typecheck        # Type-check both packages
+bun run build            # Build all three packages (via Turborepo, in dependency order)
+bun run typecheck        # Type-check all three packages
 bun run test             # Run all tests
-bun run dev              # Watch mode for both packages
+bun run dev              # Watch mode for all three packages
 ```
 
 ### Package-level commands
@@ -38,7 +38,7 @@ bun run typecheck                     # Type-check only
 
 ## Monorepo Structure
 
-Turborepo workspace with `packages/*` and `examples/*` workspaces. Build tasks have `dependsOn: ["^build"]` — backend builds before frontend if needed. All packages use `tsconfig.base.json` at root (ESNext target, strict mode, `verbatimModuleSyntax`).
+Turborepo workspace with `packages/*` and `examples/*` workspaces — three packages: `backend/`, `frontend/`, `starplan/`. Build tasks have `dependsOn: ["^build"]`, so internal cross-package deps are built in topological order. All packages use `tsconfig.base.json` at root (ESNext target, strict mode, `verbatimModuleSyntax`).
 
 ## Architecture
 
@@ -97,7 +97,7 @@ Backend tests use `bun:test` with in-memory storage adapters — no database req
 
 ## Publishing
 
-CI publishes on `v*` tags via GitHub Actions. Both packages are published to npm with `bun publish --access public`. The workflow runs `bun install --frozen-lockfile`, then `turbo build` and `turbo test` before publishing.
+CI publishes on `v*` tags via GitHub Actions. All three packages are published to npm with `bun publish --access public`. The workflow runs `bun install --frozen-lockfile`, then `turbo build` and `turbo test` before publishing.
 
 ## Versioning
 
