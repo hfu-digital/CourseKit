@@ -6,9 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is CourseKit
 
-A timetable engine for academic scheduling, published as two npm packages:
+A timetable engine for academic scheduling, published as multiple npm packages:
 - **`@hfu.digital/coursekit-nestjs`** (`packages/backend/`) — NestJS module with domain services, storage adapters, and constraint system
 - **`@hfu.digital/coursekit-react`** (`packages/frontend/`) — React hooks and components for timetable UI
+- **`@hfu.digital/coursekit-starplan`** (`packages/starplan/`) — framework-agnostic StarPlan integration: iCal parsing, content hashing, room/instructor extraction, RRULE normalization, change detection
 
 ## Development Commands
 
@@ -97,6 +98,15 @@ Backend tests use `bun:test` with in-memory storage adapters — no database req
 ## Publishing
 
 CI publishes on `v*` tags via GitHub Actions. Both packages are published to npm with `bun publish --access public`. The workflow runs `bun install --frozen-lockfile`, then `turbo build` and `turbo test` before publishing.
+
+## Versioning
+
+All `@hfu.digital` Kit packages (CourseKit, RoomKit, LoopKit, BoardKit) use **CalVer** in the form `yyyy.mm.version` — e.g., `2026.04.1`, `2026.04.2`, `2026.05.1`.
+
+- The first release of each calendar month bumps `version` to `1`.
+- Within a month, increments go `1, 2, 3, ...`.
+- Versions are **not semver-comparable**. Downstream consumers should pin **exact** versions and update intentionally — range operators (`^`, `~`) do not carry their usual semantics.
+- Git tags must match the regex `^v[0-9]{4}\.(0[1-9]|1[0-2])\.[0-9]+$`. The publish workflow's `validate-tag` job rejects malformed tags before any build runs.
 
 ## Code Style
 

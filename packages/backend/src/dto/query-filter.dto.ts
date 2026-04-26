@@ -1,5 +1,5 @@
-import { IsDateString, IsOptional, IsArray, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
+import { IsArray, IsDateString, IsOptional, IsString, ValidateNested } from 'class-validator';
 import type { ValidationResult } from '../interfaces/types.js';
 
 export class DateRangeDto {
@@ -52,20 +52,35 @@ export class QueryFilterDto {
         const d = data as Record<string, unknown>;
 
         if (!d.dateRange || typeof d.dateRange !== 'object') {
-            errors.push({ field: 'dateRange', message: 'dateRange is required and must be an object', value: d.dateRange });
+            errors.push({
+                field: 'dateRange',
+                message: 'dateRange is required and must be an object',
+                value: d.dateRange,
+            });
         } else {
             const dr = d.dateRange as Record<string, unknown>;
             if (!dr.start) {
-                errors.push({ field: 'dateRange.start', message: 'dateRange.start is required', value: dr.start });
+                errors.push({
+                    field: 'dateRange.start',
+                    message: 'dateRange.start is required',
+                    value: dr.start,
+                });
             }
             if (!dr.end) {
-                errors.push({ field: 'dateRange.end', message: 'dateRange.end is required', value: dr.end });
+                errors.push({
+                    field: 'dateRange.end',
+                    message: 'dateRange.end is required',
+                    value: dr.end,
+                });
             }
             if (dr.start && dr.end) {
                 const start = new Date(dr.start as string);
                 const end = new Date(dr.end as string);
                 if (start >= end) {
-                    errors.push({ field: 'dateRange', message: 'dateRange.start must be before dateRange.end' });
+                    errors.push({
+                        field: 'dateRange',
+                        message: 'dateRange.start must be before dateRange.end',
+                    });
                 }
             }
         }
@@ -73,7 +88,11 @@ export class QueryFilterDto {
         const arrayFields = ['instructorIds', 'roomIds', 'groupIds', 'courseIds'] as const;
         for (const field of arrayFields) {
             if (d[field] !== undefined && !Array.isArray(d[field])) {
-                errors.push({ field, message: `${field} must be an array of strings`, value: d[field] });
+                errors.push({
+                    field,
+                    message: `${field} must be an array of strings`,
+                    value: d[field],
+                });
             }
         }
 

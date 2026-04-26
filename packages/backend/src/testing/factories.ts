@@ -1,6 +1,12 @@
 import type {
-    TimetableEvent, EventException, Room, Instructor, Group,
-    Course, Availability, AcademicPeriod,
+    AcademicPeriod,
+    Availability,
+    Course,
+    EventException,
+    Group,
+    Instructor,
+    Room,
+    TimetableEvent,
 } from '../interfaces/types.js';
 
 type DeepPartial<T> = { [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P] };

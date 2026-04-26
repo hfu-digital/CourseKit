@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { TimetableEventStorage } from '../interfaces/event-storage.interface.js';
+import type {
+    DateRange,
+    FreeSlot,
+    FreeSlotQuery,
+    MaterializedOccurrence,
+    ScheduleQuery,
+} from '../interfaces/types.js';
 import { RecurrenceService } from './recurrence.service.js';
 import { TimeService } from './time.service.js';
-import type {
-    ScheduleQuery, MaterializedOccurrence, FreeSlotQuery, FreeSlot, DateRange,
-} from '../interfaces/types.js';
 
 @Injectable()
 export class QueryService {
@@ -119,7 +123,9 @@ export class QueryService {
         return this.getSchedule(query);
     }
 
-    private mergeIntervals(intervals: Array<{ start: Date; end: Date }>): Array<{ start: Date; end: Date }> {
+    private mergeIntervals(
+        intervals: Array<{ start: Date; end: Date }>,
+    ): Array<{ start: Date; end: Date }> {
         if (intervals.length === 0) return [];
 
         const result: Array<{ start: Date; end: Date }> = [{ ...intervals[0] }];

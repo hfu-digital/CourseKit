@@ -1,1606 +1,573 @@
-# CourseKit — Claude Code Implementation Plan
+# CourseKit + Website User-View Consolidation — Implementation Roadmap
 
-> **What this is:** A step-by-step execution plan for Claude Code to scaffold and build the CourseKit timetable library. It adapts the generic Kit Library Scaffold skill to CourseKit's specific domain, architectural decisions, and build requirements.
+> **Status:** approved canonical roadmap. Replaces the prior CourseKit scoping document.
+> **Last updated:** 2026-04-26
+> **Owner:** Nico Pergande (`google@nico-pergande.dev`)
 >
-> **How to use:** Execute phases sequentially. Each phase lists exact files to create, their contents, and validation steps. Do NOT skip ahead — later phases depend on earlier ones compiling cleanly.
+> **How to use:** Each phase ships in its own PR and ends in a runnable, mergeable state. PR descriptions should reference the phase number from this document. Do not skip ahead — later phases depend on earlier ones.
 
 ---
 
-## Pre-Flight: Resolved Decisions
+## Context
 
-These are locked. Do not re-ask the user about them.
+Today the HFU timetable story is fragmented across four codebases:
 
-| Decision | Value |
-|----------|-------|
-| npm scope | `@coursekit` |
-| Backend package | `@hfu.digital/coursekit-nestjs` |
-| Frontend package | `@hfu.digital/coursekit-react` |
-| Monorepo name | `coursekit` |
-| Runtime | **Bun-only** (no Node/CommonJS output) |
-| Build: JS output | `bun build --target=bun` |
-| Build: declarations | `tsc --emitDeclarationOnly` |
-| Recurrence | RRULE (RFC 5545, full spec) via `rrule` (bundled dependency) |
-| Storage interfaces | Split per entity (abstract classes) |
-| Event emitter | `@nestjs/event-emitter` (peerDependency) |
-| Validation | `class-validator` + `class-transformer` (peerDependencies) |
-| Prisma | Structural typing only — **NEVER import `@prisma/client`** |
+- **`CourseKit/`** — generic timetable engine, integrated into `api/` for read-only use, **not consumed by `website/`**.
+- **`splan-api/`** — separate public developer API (programs/semesters/courses/rooms/instructors/changes/webhooks/iCal) with its own database and StarPlan scraper.
+- **`api/src/splan/`** — duplicate StarPlan scraper feeding `Ck*` Prisma tables for the main backend.
+- **`better-splan/`** — full user-facing timetable app (Discord-auth, weekly grid, course visibility, split-lecture variants, iCal feeds, public browse pages) at `better-splan.hfu.digital`.
+- **`website/app/me/timetable`** — hand-rolled grid hitting `splan/timetable`; ignores both `coursekit-react` and the public StarPlan API.
+
+**Goal:** make the **website** the single authenticated user hub for everything timetable-related (semester selection, current courses, custom additional courses, weekly view, calendar export, change feed). Push every StarPlan-related concern into **CourseKit** so the open-source library serves any institution running StarPlan. Layer **HFU-specific** concerns (Discord notifications, in-app change feed, developer keys, audit, RBAC) on top in `api/`. Strip `better-splan/` down to a thin public marketing + browsing landing page. Retire `splan-api/` entirely; its public surface migrates to `api.hfu.digital/v1/starplan/*`.
+
+### Decisions locked in
+- **Versioning:** all Kits use **CalVer** `yyyy.mm.version` (e.g., `2026.05.1`, `2026.05.2`, `2026.06.1`). No semver. Applies to CourseKit, RoomKit, LoopKit, BoardKit.
+- **splan-api/:** retire entirely; consumers migrate to `api.hfu.digital/v1/starplan/*`; `splan.dev.hfu.digital` 301-redirects.
+- **better-splan/:** keep as thin public landing page (programs/teachers/rooms browse). Personal/auth features removed.
+- **CourseKit scope:** library + optional NestJS controllers package (`@hfu.digital/coursekit-starplan-nestjs`).
+- **Guest mode:** only on `better-splan/`, not on `website/`. Website is fully auth-gated.
+- **Migration style:** **hard cutover** in one PR per phase. No feature flag.
+- **Public dev API home:** `api.hfu.digital/v1/starplan/*` mounted on the main api.
+- **Change history:** detection + ChangeLog in CourseKit (generic); notifications, Discord push, in-app feed, HFU webhooks in `api/`.
+
+### Architectural target
+
+```
+                        ┌──────────────────────────────────────────┐
+                        │        @hfu.digital/coursekit-*          │
+                        │  (open source, CalVer yyyy.mm.version)   │
+                        ├──────────────────────────────────────────┤
+                        │ coursekit-nestjs       coursekit-react   │
+                        │ coursekit-starplan     coursekit-starplan│
+                        │   (engine: parse,        -nestjs         │
+                        │    scrape, hash,         (mountable      │
+                        │    ChangeLog,            controllers)    │
+                        │    RRULE expand)                         │
+                        └──────────────────────────────────────────┘
+                                          ▲
+                                          │ consumes
+       ┌──────────────────────────────────┼─────────────────────────────────┐
+       │                                  │                                 │
+┌──────┴────────┐                ┌────────┴────────┐                ┌───────┴────────┐
+│   api/        │                │   website/      │                │ better-splan/  │
+│ (HFU layer)   │                │ (auth user hub) │                │ (thin browse)  │
+├───────────────┤                ├─────────────────┤                ├────────────────┤
+│ /v1/starplan/*│  ← retired splan-api lives here │ public /programs│
+│ /me/* (HFU)   │                │ /me/timetable   │ /teachers      │
+│ Discord       │                │ /me/courses     │ /rooms         │
+│ in-app feed   │                │ /me/calendar    │ no auth        │
+│ dev keys      │                │ /me/changes     │ uses /v1/      │
+│ webhooks      │                │ admin /admin/*  │   starplan/*   │
+│ HFU SAML SSO  │                │                 │                │
+└───────────────┘                └─────────────────┘                └────────────────┘
+```
+
+`splan-api/` ceases to exist as a deployable service.
 
 ---
 
-## Phase 0 — Scaffold Monorepo Shell
+## Phase Map
 
-**Goal:** Empty monorepo that runs `bun install` and `turbo build` without errors.
-
-### 0.1 Create directory structure
-
-```
-/coursekit
-├── package.json
-├── turbo.json
-├── tsconfig.base.json
-├── bunfig.toml
-├── .gitignore
-├── LICENSE                        # MIT
-├── README.md                      # Stub — filled in Phase 7
-├── packages/
-│   ├── backend/
-│   │   ├── package.json
-│   │   ├── tsconfig.json
-│   │   └── src/
-│   │       └── index.ts           # empty barrel: export {}
-│   └── frontend/
-│       ├── package.json
-│       ├── tsconfig.json
-│       ├── vite.config.ts
-│       └── src/
-│           └── index.ts           # empty barrel: export {}
-├── examples/                      # empty — populated in Tier 2
-│   └── .gitkeep
-└── .github/
-    └── workflows/
-        └── publish.yml
-```
-
-### 0.2 Root `package.json`
-
-```json
-{
-  "name": "coursekit",
-  "private": true,
-  "workspaces": ["packages/*", "examples/*"],
-  "devDependencies": {
-    "turbo": "^2.0.0"
-  },
-  "scripts": {
-    "build": "turbo build",
-    "dev": "turbo dev",
-    "lint": "turbo lint",
-    "typecheck": "turbo typecheck",
-    "test": "turbo test"
-  }
-}
-```
-
-### 0.3 `turbo.json`
-
-```json
-{
-  "$schema": "https://turbo.build/schema.json",
-  "tasks": {
-    "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
-    },
-    "dev": {
-      "cache": false,
-      "persistent": true
-    },
-    "typecheck": {
-      "dependsOn": ["^build"]
-    },
-    "test": {
-      "dependsOn": ["^build"]
-    },
-    "lint": {}
-  }
-}
-```
-
-> **Note:** Turborepo v2 uses `"tasks"` not `"pipeline"`. Use `"tasks"`.
-
-### 0.4 `tsconfig.base.json` (Bun-native)
-
-```json
-{
-  "compilerOptions": {
-    "target": "ESNext",
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "lib": ["ESNext"],
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "noImplicitThis": true,
-    "alwaysStrict": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
-    "isolatedModules": true,
-    "verbatimModuleSyntax": true,
-    "resolveJsonModule": true
-  }
-}
-```
-
-> **Differs from generic Kit skill:** No `"module": "commonjs"`, no `"outDir"/"rootDir"` at base level. Bun-only means ESNext modules throughout. Each package's tsconfig sets its own `outDir`/`rootDir`.
-
-### 0.5 `bunfig.toml`
-
-```toml
-[install]
-peer = true
-
-[install.lockfile]
-save = true
-```
-
-### 0.6 Backend `packages/backend/package.json`
-
-```json
-{
-  "name": "@hfu.digital/coursekit-nestjs",
-  "version": "0.1.0",
-  "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    },
-    "./testing": {
-      "import": "./dist/testing/index.js",
-      "types": "./dist/testing/index.d.ts"
-    }
-  },
-  "files": ["dist"],
-  "scripts": {
-    "build": "bun run build:js && bun run build:types",
-    "build:js": "bun build src/index.ts src/testing/index.ts --outdir dist --target bun --splitting --format esm",
-    "build:types": "tsc --emitDeclarationOnly --outDir dist",
-    "dev": "bun run build --watch",
-    "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "prepublishOnly": "bun run build"
-  },
-  "peerDependencies": {
-    "@nestjs/common": "^10.0.0 || ^11.0.0",
-    "@nestjs/core": "^10.0.0 || ^11.0.0",
-    "@nestjs/event-emitter": "^2.0.0 || ^3.0.0",
-    "rxjs": "^7.0.0",
-    "class-validator": "^0.14.0",
-    "class-transformer": "^0.5.0"
-  },
-  "dependencies": {
-    "rrule": "^2.8.1"
-  },
-  "devDependencies": {
-    "@nestjs/common": "^11.0.0",
-    "@nestjs/core": "^11.0.0",
-    "@nestjs/event-emitter": "^3.0.0",
-    "@nestjs/testing": "^11.0.0",
-    "rxjs": "^7.0.0",
-    "class-validator": "^0.14.0",
-    "class-transformer": "^0.5.0",
-    "reflect-metadata": "^0.2.0",
-    "typescript": "^5.7.0",
-    "@types/bun": "latest"
-  }
-}
-```
-
-> **Key adaptations from generic skill:**
-> - `rrule` is a direct `dependency` (bundled), not a peer — simplifies consumer DX.
-> - `@nestjs/event-emitter` added as peerDependency.
-> - `class-validator` + `class-transformer` as peers for DTO validation.
-> - Build uses `bun build` for JS, `tsc --emitDeclarationOnly` for types.
-> - Separate `./testing` export path for test utilities (Tier 2).
-> - `"type": "module"` — Bun-only, ESM throughout.
-
-### 0.7 Backend `packages/backend/tsconfig.json`
-
-```json
-{
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
-  },
-  "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts"]
-}
-```
-
-> NestJS decorators require `experimentalDecorators` + `emitDecoratorMetadata`.
-
-### 0.8 Frontend `packages/frontend/package.json`
-
-```json
-{
-  "name": "@hfu.digital/coursekit-react",
-  "version": "0.1.0",
-  "type": "module",
-  "main": "dist/index.js",
-  "module": "dist/index.es.js",
-  "types": "dist/index.d.ts",
-  "files": ["dist"],
-  "scripts": {
-    "build": "bunx vite build",
-    "dev": "bunx vite build --watch",
-    "typecheck": "tsc --noEmit",
-    "prepublishOnly": "bun run build"
-  },
-  "peerDependencies": {
-    "react": "^18.0.0 || ^19.0.0",
-    "react-dom": "^18.0.0 || ^19.0.0"
-  },
-  "devDependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@types/react": "^19.0.0",
-    "@vitejs/plugin-react": "^4.0.0",
-    "vite": "^6.0.0",
-    "vite-plugin-dts": "^4.0.0",
-    "typescript": "^5.7.0"
-  }
-}
-```
-
-### 0.9 Frontend `packages/frontend/tsconfig.json`
-
-```json
-{
-  "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "jsx": "react-jsx",
-    "lib": ["ESNext", "DOM", "DOM.Iterable"]
-  },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["node_modules", "dist"]
-}
-```
-
-### 0.10 Frontend `packages/frontend/vite.config.ts`
-
-```typescript
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import dts from 'vite-plugin-dts';
-import { resolve } from 'path';
-
-export default defineConfig({
-  plugins: [react(), dts({ rollupTypes: true })],
-  build: {
-    lib: {
-      entry: resolve(__dirname, 'src/index.ts'),
-      name: 'CourseKitReact',
-      formats: ['es', 'cjs'],
-      fileName: (format) => `index.${format === 'es' ? 'es.' : ''}js`,
-    },
-    rollupOptions: {
-      external: ['react', 'react-dom', 'react/jsx-runtime'],
-      output: { globals: { react: 'React', 'react-dom': 'ReactDOM' } },
-    },
-  },
-});
-```
-
-### 0.11 `.github/workflows/publish.yml`
-
-```yaml
-name: Publish Packages
-on:
-  push:
-    tags: ['v*']
-
-jobs:
-  publish:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-      - run: bun install --frozen-lockfile
-      - run: bunx turbo build
-      - run: bunx turbo test
-      - name: Publish Backend
-        working-directory: packages/backend
-        run: bun publish --access public
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - name: Publish Frontend
-        working-directory: packages/frontend
-        run: bun publish --access public
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-```
-
-### 0.12 `.gitignore`
-
-```
-node_modules/
-dist/
-.turbo/
-bun.lockb
-*.tsbuildinfo
-```
-
-### 0.13 Validation
-
-```bash
-cd coursekit
-bun install
-bun run typecheck   # should pass (empty barrels)
-bun run build       # should produce dist/ in both packages
-```
+| # | Phase | Repos touched | Outcome |
+|---|---|---|---|
+| 0 | Versioning + tooling foundations | All Kits | CalVer adopted; lint/format consistent; CourseKit ready for big changes |
+| 1 | CourseKit core hardening | CourseKit | Domain errors, response DTOs, optimistic-locking surface, more tests |
+| 2 | CourseKit StarPlan adapter (open source) | CourseKit | New package owns iCal parsing, content hashing, room/instructor extraction, RRULE expansion, sync orchestration, generic ChangeLog |
+| 3 | CourseKit StarPlan NestJS controllers | CourseKit | New optional package mounts public endpoints (programs/semesters/courses/rooms/instructors/search/changes/ical/week) |
+| 4 | api/: developer-key + webhook layer | api | HFU-specific developer registration, key rotation, webhook delivery (lifted from splan-api), audit |
+| 5 | api/: mount StarPlan controllers + cron | api | `/v1/starplan/*` live; old `api/src/splan/starplan-scraper.service.ts` removed; `Ck*` Prisma tables now the only StarPlan storage |
+| 6 | website/: user hub rebuild (hard cutover) | website | `/me/timetable`, `/me/courses`, `/me/calendar`, `/me/changes` — all CourseKit-backed |
+| 7 | better-splan/: strip to public landing | better-splan | Auth/personal/admin removed; public browse uses `/v1/starplan/*` |
+| 8 | splan-api/ retirement | splan-api, infra | DNS 301; data migrated to api/; deployment decommissioned; repo archived |
+| 9 | Public dev API parity, docs, hardening | api, public-docs | OpenAPI updated; migration guide; rate limits; production cut at `2026.MM.1` |
 
 ---
 
-## Phase 1 — Types & Interfaces Foundation
-
-**Goal:** Define all entity types, domain event payloads, and storage interface contracts. No implementation yet — just the shapes.
-
-### 1.1 Create `packages/backend/src/interfaces/types.ts`
-
-This is the single source of truth for all entity shapes. Every type that appears in the Prisma schema reference gets a TypeScript equivalent here.
-
-```typescript
-// ALL entity types live here. Prisma adapters map to these shapes.
-// NEVER import @prisma/client — these are structural types.
-
-// ─── Core Event ──────────────────────────────────────────────
-export interface TimetableEvent {
-  id: string;
-  title: string;
-  startTime: Date;
-  durationMin: number;
-  recurrenceRule: string | null;   // RFC 5545 RRULE string
-  metadata: Record<string, unknown> | null;
-  courseId: string | null;
-  roomId: string | null;
-  periodId: string | null;
-  version: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface EventException {
-  id: string;
-  eventId: string;
-  originalDate: Date;              // which occurrence this overrides
-  type: 'cancelled' | 'modified' | 'added';
-  newStartTime: Date | null;
-  newDurationMin: number | null;
-  newRoomId: string | null;
-  metadata: Record<string, unknown> | null;
-}
-
-// ─── Join Tables ─────────────────────────────────────────────
-export interface EventInstructor {
-  id: string;
-  eventId: string;
-  instructorId: string;
-  role: string;                    // "primary" | "ta" | "co-lecturer"
-}
-
-export interface EventGroup {
-  id: string;
-  eventId: string;
-  groupId: string;
-}
-
-// ─── Entities ────────────────────────────────────────────────
-export interface Instructor {
-  id: string;
-  name: string;
-  email: string | null;
-  tags: Record<string, unknown> | null;
-}
-
-export interface Room {
-  id: string;
-  name: string;
-  building: string | null;
-  campus: string | null;
-  capacity: number;
-  tags: Record<string, unknown> | null;
-}
-
-export interface Group {
-  id: string;
-  name: string;
-  type: 'fixed' | 'enrollment';
-  maxCapacity: number | null;
-}
-
-export interface Student {
-  id: string;
-  name: string;
-  email: string | null;
-}
-
-export interface StudentGroup {
-  id: string;
-  studentId: string;
-  groupId: string;
-}
-
-export interface Course {
-  id: string;
-  name: string;
-  code: string | null;
-  parentId: string | null;
-  metadata: Record<string, unknown> | null;
-}
-
-// ─── Availability ────────────────────────────────────────────
-export type AvailabilityEntityType = 'instructor' | 'room';
-export type AvailabilityType = 'available' | 'blocked' | 'preferred';
-export type AvailabilityHardness = 'hard' | 'soft';
-
-export interface Availability {
-  id: string;
-  entityType: AvailabilityEntityType;
-  entityId: string;
-  dayOfWeek: number | null;        // 0=Mon, 6=Sun
-  specificDate: Date | null;
-  startTime: Date;
-  endTime: Date;
-  type: AvailabilityType;
-  hardness: AvailabilityHardness;
-  priority: number;
-  recurrenceRule: string | null;
-}
-
-// ─── Academic Periods ────────────────────────────────────────
-export type PeriodType = 'semester' | 'holiday' | 'exam' | 'break';
-
-export interface AcademicPeriod {
-  id: string;
-  name: string;
-  type: PeriodType;
-  startDate: Date;
-  endDate: Date;
-  parentId: string | null;
-}
-
-// ─── Location Distance ──────────────────────────────────────
-export interface LocationDistance {
-  id: string;
-  fromCampus: string;
-  toCampus: string;
-  travelMinutes: number;
-}
-
-// ─── Materialized Occurrence ────────────────────────────────
-// Result of expanding a recurring event for a date range.
-// NOT stored — computed at query time.
-export interface MaterializedOccurrence {
-  eventId: string;
-  occurrenceDate: Date;
-  startTime: Date;
-  durationMin: number;
-  roomId: string | null;
-  metadata: Record<string, unknown> | null;
-  isException: boolean;
-  exceptionType: EventException['type'] | null;
-  originalEvent: TimetableEvent;
-}
-
-// ─── Query/Filter Types ─────────────────────────────────────
-export interface DateRange {
-  start: Date;
-  end: Date;
-}
-
-export interface ScheduleQuery {
-  dateRange: DateRange;
-  instructorIds?: string[];
-  roomIds?: string[];
-  groupIds?: string[];
-  courseIds?: string[];
-  periodId?: string;
-  tags?: Record<string, unknown>;
-}
-
-export interface FreeSlotQuery {
-  dateRange: DateRange;
-  durationMin: number;
-  entityIds: Array<{ type: 'instructor' | 'room' | 'group'; id: string }>;
-}
-
-export interface FreeSlot {
-  start: Date;
-  end: Date;
-  durationMin: number;
-}
-
-// ─── Conflict Types ─────────────────────────────────────────
-export type ConflictSeverity = 'error' | 'warning';
-
-export interface Conflict {
-  id: string;
-  type: string;                    // e.g. "instructor-double-book", "room-overlap"
-  severity: ConflictSeverity;
-  message: string;
-  involvedEventIds: string[];
-  involvedEntityIds: string[];
-  metadata: Record<string, unknown>;
-}
-
-export interface ConflictCheckResult {
-  hasErrors: boolean;
-  hasWarnings: boolean;
-  conflicts: Conflict[];
-}
-
-// ─── Validation Error ───────────────────────────────────────
-export interface ValidationError {
-  field: string;
-  message: string;
-  value?: unknown;
-}
-
-export interface ValidationResult {
-  valid: boolean;
-  errors: ValidationError[];
-}
-```
-
-### 1.2 Create storage interfaces (split per entity)
-
-Each storage interface is an **abstract class** (not a TS interface) so NestJS DI can use it as an injection token.
-
-Create one file per entity storage:
-
-**`packages/backend/src/interfaces/event-storage.interface.ts`**
-
-```typescript
-import type {
-  TimetableEvent, EventException, EventInstructor, EventGroup,
-  ScheduleQuery, MaterializedOccurrence, DateRange,
-} from './types.js';
-
-export abstract class TimetableEventStorage {
-  abstract create(data: Omit<TimetableEvent, 'id' | 'createdAt' | 'updatedAt' | 'version'>): Promise<TimetableEvent>;
-  abstract findById(id: string): Promise<TimetableEvent | null>;
-  abstract findByQuery(query: ScheduleQuery): Promise<TimetableEvent[]>;
-  abstract update(id: string, data: Partial<TimetableEvent>, expectedVersion?: number): Promise<TimetableEvent>;
-  abstract delete(id: string): Promise<void>;
-
-  // Exception management
-  abstract createException(data: Omit<EventException, 'id'>): Promise<EventException>;
-  abstract findExceptions(eventId: string): Promise<EventException[]>;
-  abstract deleteException(id: string): Promise<void>;
-
-  // Instructor/Group associations
-  abstract addInstructor(data: Omit<EventInstructor, 'id'>): Promise<EventInstructor>;
-  abstract removeInstructor(eventId: string, instructorId: string): Promise<void>;
-  abstract findInstructors(eventId: string): Promise<EventInstructor[]>;
-
-  abstract addGroup(data: Omit<EventGroup, 'id'>): Promise<EventGroup>;
-  abstract removeGroup(eventId: string, groupId: string): Promise<void>;
-  abstract findGroups(eventId: string): Promise<EventGroup[]>;
-}
-```
-
-**`packages/backend/src/interfaces/room-storage.interface.ts`**
-
-```typescript
-import type { Room } from './types.js';
-
-export abstract class RoomStorage {
-  abstract create(data: Omit<Room, 'id'>): Promise<Room>;
-  abstract findById(id: string): Promise<Room | null>;
-  abstract findAll(filters?: { building?: string; campus?: string; minCapacity?: number; tags?: Record<string, unknown> }): Promise<Room[]>;
-  abstract update(id: string, data: Partial<Room>): Promise<Room>;
-  abstract delete(id: string): Promise<void>;
-}
-```
-
-**`packages/backend/src/interfaces/instructor-storage.interface.ts`**
-
-```typescript
-import type { Instructor } from './types.js';
-
-export abstract class InstructorStorage {
-  abstract create(data: Omit<Instructor, 'id'>): Promise<Instructor>;
-  abstract findById(id: string): Promise<Instructor | null>;
-  abstract findAll(filters?: { tags?: Record<string, unknown> }): Promise<Instructor[]>;
-  abstract update(id: string, data: Partial<Instructor>): Promise<Instructor>;
-  abstract delete(id: string): Promise<void>;
-}
-```
-
-**`packages/backend/src/interfaces/group-storage.interface.ts`**
-
-```typescript
-import type { Group, StudentGroup } from './types.js';
-
-export abstract class GroupStorage {
-  abstract create(data: Omit<Group, 'id'>): Promise<Group>;
-  abstract findById(id: string): Promise<Group | null>;
-  abstract findAll(filters?: { type?: Group['type'] }): Promise<Group[]>;
-  abstract update(id: string, data: Partial<Group>): Promise<Group>;
-  abstract delete(id: string): Promise<void>;
-
-  abstract addStudent(data: Omit<StudentGroup, 'id'>): Promise<StudentGroup>;
-  abstract removeStudent(studentId: string, groupId: string): Promise<void>;
-  abstract findStudents(groupId: string): Promise<StudentGroup[]>;
-  abstract findGroupsForStudent(studentId: string): Promise<StudentGroup[]>;
-}
-```
-
-**`packages/backend/src/interfaces/availability-storage.interface.ts`**
-
-```typescript
-import type { Availability, AvailabilityEntityType, DateRange } from './types.js';
-
-export abstract class AvailabilityStorage {
-  abstract create(data: Omit<Availability, 'id'>): Promise<Availability>;
-  abstract findById(id: string): Promise<Availability | null>;
-  abstract findByEntity(entityType: AvailabilityEntityType, entityId: string): Promise<Availability[]>;
-  abstract findByEntityInRange(entityType: AvailabilityEntityType, entityId: string, dateRange: DateRange): Promise<Availability[]>;
-  abstract update(id: string, data: Partial<Availability>): Promise<Availability>;
-  abstract delete(id: string): Promise<void>;
-}
-```
-
-**`packages/backend/src/interfaces/period-storage.interface.ts`**
-
-```typescript
-import type { AcademicPeriod, DateRange } from './types.js';
-
-export abstract class AcademicPeriodStorage {
-  abstract create(data: Omit<AcademicPeriod, 'id'>): Promise<AcademicPeriod>;
-  abstract findById(id: string): Promise<AcademicPeriod | null>;
-  abstract findAll(filters?: { type?: AcademicPeriod['type']; parentId?: string }): Promise<AcademicPeriod[]>;
-  abstract findOverlapping(dateRange: DateRange): Promise<AcademicPeriod[]>;
-  abstract findChildren(parentId: string): Promise<AcademicPeriod[]>;
-  abstract update(id: string, data: Partial<AcademicPeriod>): Promise<AcademicPeriod>;
-  abstract delete(id: string): Promise<void>;
-}
-```
-
-**`packages/backend/src/interfaces/course-storage.interface.ts`**
-
-```typescript
-import type { Course } from './types.js';
-
-export abstract class CourseStorage {
-  abstract create(data: Omit<Course, 'id'>): Promise<Course>;
-  abstract findById(id: string): Promise<Course | null>;
-  abstract findByCode(code: string): Promise<Course | null>;
-  abstract findAll(filters?: { parentId?: string }): Promise<Course[]>;
-  abstract findChildren(parentId: string): Promise<Course[]>;
-  abstract update(id: string, data: Partial<Course>): Promise<Course>;
-  abstract delete(id: string): Promise<void>;
-}
-```
-
-**`packages/backend/src/interfaces/location-distance-storage.interface.ts`**
-
-```typescript
-import type { LocationDistance } from './types.js';
-
-export abstract class LocationDistanceStorage {
-  abstract create(data: Omit<LocationDistance, 'id'>): Promise<LocationDistance>;
-  abstract findByCampuses(fromCampus: string, toCampus: string): Promise<LocationDistance | null>;
-  abstract findAll(): Promise<LocationDistance[]>;
-  abstract update(id: string, data: Partial<LocationDistance>): Promise<LocationDistance>;
-  abstract delete(id: string): Promise<void>;
-}
-```
-
-### 1.3 Create `packages/backend/src/interfaces/constraint.interface.ts`
-
-The pluggable conflict detection contract:
-
-```typescript
-import type { TimetableEvent, MaterializedOccurrence, Conflict, DateRange } from './types.js';
-
-/**
- * A constraint rule that the conflict detection engine evaluates.
- * Consumers can register custom constraints alongside built-ins.
- */
-export abstract class ScheduleConstraint {
-  /** Unique identifier for this constraint type, e.g. "instructor-overlap" */
-  abstract readonly type: string;
-
-  /** Human-readable description */
-  abstract readonly description: string;
-
-  /**
-   * Evaluate whether a set of occurrences violates this constraint.
-   * Returns an empty array if no violations found.
-   */
-  abstract evaluate(
-    occurrences: MaterializedOccurrence[],
-    context: ConstraintContext,
-  ): Promise<Conflict[]>;
-}
-
-export interface ConstraintContext {
-  dateRange: DateRange;
-  allEvents: TimetableEvent[];
-  /** Lookup helpers injected by the conflict service */
-  getInstructorsForEvent: (eventId: string) => Promise<string[]>;
-  getGroupsForEvent: (eventId: string) => Promise<string[]>;
-}
-```
-
-### 1.4 Create `packages/backend/src/interfaces/domain-events.interface.ts`
-
-Typed event payloads for the internal event emitter:
-
-```typescript
-import type {
-  TimetableEvent, EventException, Availability,
-  Conflict, ConflictCheckResult,
-} from './types.js';
-
-// ─── Event Names (constants for type safety) ────────────────
-export const DOMAIN_EVENTS = {
-  EVENT_CREATED: 'coursekit.event.created',
-  EVENT_UPDATED: 'coursekit.event.updated',
-  EVENT_DELETED: 'coursekit.event.deleted',
-  EXCEPTION_CREATED: 'coursekit.exception.created',
-  EXCEPTION_DELETED: 'coursekit.exception.deleted',
-  CONFLICT_DETECTED: 'coursekit.conflict.detected',
-  AVAILABILITY_CREATED: 'coursekit.availability.created',
-  AVAILABILITY_UPDATED: 'coursekit.availability.updated',
-  AVAILABILITY_DELETED: 'coursekit.availability.deleted',
-} as const;
-
-// ─── Payload Types ───────────────────────────────────────────
-export interface EventCreatedPayload {
-  event: TimetableEvent;
-}
-
-export interface EventUpdatedPayload {
-  previous: TimetableEvent;
-  current: TimetableEvent;
-  changedFields: string[];
-}
-
-export interface EventDeletedPayload {
-  event: TimetableEvent;
-}
-
-export interface ExceptionCreatedPayload {
-  exception: EventException;
-  parentEvent: TimetableEvent;
-}
-
-export interface ExceptionDeletedPayload {
-  exception: EventException;
-  parentEvent: TimetableEvent;
-}
-
-export interface ConflictDetectedPayload {
-  result: ConflictCheckResult;
-  triggeringEventId: string;
-}
-
-export interface AvailabilityCreatedPayload {
-  availability: Availability;
-}
-
-export interface AvailabilityUpdatedPayload {
-  previous: Availability;
-  current: Availability;
-}
-
-export interface AvailabilityDeletedPayload {
-  availability: Availability;
-}
-
-// ─── Union Map (for typed subscribers) ──────────────────────
-export interface DomainEventMap {
-  [DOMAIN_EVENTS.EVENT_CREATED]: EventCreatedPayload;
-  [DOMAIN_EVENTS.EVENT_UPDATED]: EventUpdatedPayload;
-  [DOMAIN_EVENTS.EVENT_DELETED]: EventDeletedPayload;
-  [DOMAIN_EVENTS.EXCEPTION_CREATED]: ExceptionCreatedPayload;
-  [DOMAIN_EVENTS.EXCEPTION_DELETED]: ExceptionDeletedPayload;
-  [DOMAIN_EVENTS.CONFLICT_DETECTED]: ConflictDetectedPayload;
-  [DOMAIN_EVENTS.AVAILABILITY_CREATED]: AvailabilityCreatedPayload;
-  [DOMAIN_EVENTS.AVAILABILITY_UPDATED]: AvailabilityUpdatedPayload;
-  [DOMAIN_EVENTS.AVAILABILITY_DELETED]: AvailabilityDeletedPayload;
-}
-```
-
-### 1.5 Validation
-
-```bash
-cd coursekit
-bun run typecheck  # All interfaces should compile with zero errors
-```
+## Phase 0 — Versioning + Tooling Foundations
+
+**Why first:** the rework will produce many breaking changes in CourseKit. Settling versioning policy and lint tooling now means every later commit lands cleanly under one regime.
+
+### 0.1 Adopt CalVer `yyyy.mm.version` across all Kits
+- Update `package.json` `version` in every package of `CourseKit/`, `RoomKit/`, `LoopKit/`, `BoardKit/` to current month: `2026.04.1`.
+- Update GH Actions `publish.yml` in each Kit to validate tags as `vYYYY.MM.N` regex before publishing.
+- Document the convention in each Kit's root `README.md` and `CLAUDE.md`:
+  > Versions follow CalVer: `yyyy.mm.version`. The first release of each calendar month bumps `version` to `1`. Within a month, increments are `2, 3, ...`. Versions are not semver-comparable; downstream consumers should pin exact versions and update intentionally.
+- Critical files:
+    - `CourseKit/packages/backend/package.json`
+    - `CourseKit/packages/frontend/package.json`
+    - `CourseKit/.github/workflows/publish.yml`
+    - Equivalents in `RoomKit/`, `LoopKit/`, `BoardKit/`
+
+### 0.2 Lint + format parity in CourseKit
+- Add Biome (matching the rest of the platform) to CourseKit root: `biome.json`, `bun add -D @biomejs/biome`.
+- Configure 4-space indent, single quotes, line width 100, `"all"` trailing commas.
+- Add `bun run check` and `bun run check:fix` scripts at root and in each package.
+- Wire into Turbo pipeline: `turbo.json` adds `check` task.
+- Critical files:
+    - `CourseKit/biome.json` (new)
+    - `CourseKit/turbo.json`
+    - `CourseKit/package.json` scripts
+
+### 0.3 Domain-specific exception classes in CourseKit
+- Create `packages/backend/src/errors/` with: `CourseKitError` (base), `EntityNotFoundError`, `VersionConflictError`, `ConstraintViolationError`, `InvalidRRuleError`, `StorageError`.
+- Replace every `throw new Error('...')` with the appropriate subclass. Carry an `errorCode: string` enum for machine handling.
+- Export from package root and re-export from `/testing` where useful for assertions.
+- Critical files:
+    - `CourseKit/packages/backend/src/errors/index.ts` (new)
+    - All service files in `packages/backend/src/services/`
+    - All adapter files in `packages/backend/src/adapters/`
+
+### 0.4 Response DTO shape lock
+- Define `OccurrenceDto`, `ConflictDto`, `AvailabilityDto` etc. as exported types.
+- `QueryService.getSchedule()` returns these shapes (currently it leaks Prisma-ish structures).
+- Add `zod` schemas for runtime validation in tests.
+
+### Verification (Phase 0)
+- `cd CourseKit && bun run check && bun run build && bun run test` passes.
+- Tag `v2026.04.1` builds and publishes via the existing CI pipeline (dry-run via `npm publish --dry-run` first).
 
 ---
 
-## Phase 2 — Domain Services (Tier 1 Logic)
+## Phase 1 — CourseKit Core Hardening
 
-**Goal:** Implement the 6 core domain services. Each service depends only on storage interfaces and the event emitter — never on concrete adapters.
+### 1.1 Optimistic-locking surface
+- Document the `version` field semantics in `CLAUDE.md`.
+- Add `update()` overloads on every storage interface that mutates entities (currently only `TimetableEvent`). Apply to `EventException`, `Availability`, `LocationDistance`.
+- Throw `VersionConflictError` (from 0.3) on mismatch.
 
-### Build order (dependencies flow downward):
+### 1.2 Test coverage uplift
+- Target: >85% line coverage on `packages/backend/src/services/`. Use `bun test --coverage`.
+- Add specs for: error paths in `RecurrenceService.validate`, `AvailabilityService.findFreeSlots` boundary cases, `ConflictService.dryRun`, version-conflict update scenarios.
+- Add a `packages/backend/src/__tests__/contract.test.ts` that exercises every storage interface via in-memory adapters — this becomes the spec adapters must satisfy.
 
-```
-RecurrenceService      (standalone — wraps rrule.js)
-     ↓
-TimeService            (uses RecurrenceService)
-     ↓
-EntityService          (CRUD orchestration, uses storage interfaces)
-     ↓
-AvailabilityService    (uses AvailabilityStorage, RecurrenceService)
-     ↓
-ConflictService        (uses TimeService, AvailabilityService, ScheduleConstraint[])
-     ↓
-QueryService           (uses all storage interfaces, RecurrenceService, ConflictService)
-```
+### 1.3 Frontend hooks polish
+- `coursekit-react`: tighten `useTimetable` types so the response matches Phase 0.4 DTOs.
+- Add `useChanges`, `useSemester`, `useCourseSubscriptions` hooks (will be used by website in Phase 6).
+- Ensure `<TimetableGrid />` is configurable: study blocks pluggable, week start day pluggable (so non-HFU users can configure 5- or 6-day weeks).
 
-### 2.1 `packages/backend/src/domain/recurrence.service.ts`
-
-Core responsibility: wrap `rrule.js`, provide materialization, handle EXDATE/RDATE/exceptions.
-
-```typescript
-import { Injectable } from '@nestjs/common';
-import { RRule, RRuleSet, rrulestr } from 'rrule';
-import type { TimetableEvent, EventException, MaterializedOccurrence, DateRange } from '../interfaces/types.js';
-
-@Injectable()
-export class RecurrenceService {
-  /**
-   * Parse an RRULE string into an RRule instance.
-   * Throws if the string is invalid.
-   */
-  parseRule(rruleString: string, dtstart: Date): RRule { /* ... */ }
-
-  /**
-   * Materialize a recurring event into concrete occurrences for a date range.
-   * Applies exceptions (cancellations, modifications, additions).
-   */
-  materialize(
-    event: TimetableEvent,
-    exceptions: EventException[],
-    dateRange: DateRange,
-  ): MaterializedOccurrence[] { /* ... */ }
-
-  /**
-   * For a non-recurring event, return a single occurrence if it falls in the range.
-   */
-  materializeSingle(
-    event: TimetableEvent,
-    dateRange: DateRange,
-  ): MaterializedOccurrence | null { /* ... */ }
-
-  /**
-   * Validate an RRULE string. Returns null if valid, error message if invalid.
-   */
-  validateRule(rruleString: string): string | null { /* ... */ }
-}
-```
-
-**Implementation notes:**
-- Use `RRuleSet` to combine RRULE + EXDATE + RDATE.
-- For exceptions of type `modified`, clone the parent occurrence and apply overrides.
-- For exceptions of type `added`, inject an extra occurrence at `originalDate`.
-- For exceptions of type `cancelled`, add to EXDATE set.
-- All dates internally UTC. Use `RRule.prototype.between(start, end, true)` for materialization.
-
-### 2.2 `packages/backend/src/domain/time.service.ts`
-
-Utility service for time operations used across the domain.
-
-```typescript
-@Injectable()
-export class TimeService {
-  /** Check if two time intervals overlap */
-  overlaps(aStart: Date, aDurationMin: number, bStart: Date, bDurationMin: number): boolean { /* ... */ }
-
-  /** Compute end time from start + duration */
-  endTime(start: Date, durationMin: number): Date { /* ... */ }
-
-  /** Check if a date falls within a range */
-  isInRange(date: Date, range: DateRange): boolean { /* ... */ }
-
-  /** Compute gap in minutes between two consecutive events */
-  gapMinutes(endOfFirst: Date, startOfSecond: Date): number { /* ... */ }
-}
-```
-
-### 2.3 `packages/backend/src/domain/availability.service.ts`
-
-```typescript
-@Injectable()
-export class AvailabilityService {
-  constructor(
-    private readonly storage: AvailabilityStorage,
-    private readonly recurrence: RecurrenceService,
-    private readonly eventEmitter: EventEmitter2,
-  ) {}
-
-  async create(data: Omit<Availability, 'id'>): Promise<Availability> { /* ... emit event ... */ }
-  async update(id: string, data: Partial<Availability>): Promise<Availability> { /* ... emit event ... */ }
-  async delete(id: string): Promise<void> { /* ... emit event ... */ }
-
-  /**
-   * Check if an entity is available at a specific time.
-   * Expands recurring availability rules for the given date.
-   */
-  async isAvailable(
-    entityType: AvailabilityEntityType,
-    entityId: string,
-    start: Date,
-    durationMin: number,
-  ): Promise<{ available: boolean; conflicts: Availability[] }> { /* ... */ }
-
-  /**
-   * Find free slots for an entity within a date range.
-   */
-  async findFreeSlots(
-    entityType: AvailabilityEntityType,
-    entityId: string,
-    dateRange: DateRange,
-    minDurationMin: number,
-  ): Promise<FreeSlot[]> { /* ... */ }
-}
-```
-
-### 2.4 `packages/backend/src/domain/conflict.service.ts`
-
-```typescript
-@Injectable()
-export class ConflictService {
-  constructor(
-    private readonly time: TimeService,
-    private readonly availability: AvailabilityService,
-    private readonly eventStorage: TimetableEventStorage,
-    private readonly recurrence: RecurrenceService,
-    private readonly eventEmitter: EventEmitter2,
-    @Inject('SCHEDULE_CONSTRAINTS') private readonly constraints: ScheduleConstraint[],
-  ) {}
-
-  /**
-   * Check a single event (or proposed event) against all registered constraints.
-   * Materializes recurring events in the relevant date range.
-   */
-  async check(event: TimetableEvent, dateRange: DateRange): Promise<ConflictCheckResult> { /* ... */ }
-
-  /**
-   * Dry-run: check what conflicts a mutation would create without applying it.
-   */
-  async dryRun(proposedEvent: Omit<TimetableEvent, 'id' | 'createdAt' | 'updatedAt' | 'version'>, dateRange: DateRange): Promise<ConflictCheckResult> { /* ... */ }
-}
-```
-
-### 2.5 `packages/backend/src/domain/query.service.ts`
-
-```typescript
-@Injectable()
-export class QueryService {
-  constructor(
-    private readonly eventStorage: TimetableEventStorage,
-    private readonly recurrence: RecurrenceService,
-    private readonly time: TimeService,
-  ) {}
-
-  /**
-   * Get all materialized occurrences matching a query.
-   * Expands recurring events, applies exceptions, filters by entities.
-   */
-  async getSchedule(query: ScheduleQuery): Promise<MaterializedOccurrence[]> { /* ... */ }
-
-  /**
-   * Find time slots where ALL specified entities are free.
-   */
-  async findFreeSlots(query: FreeSlotQuery): Promise<FreeSlot[]> { /* ... */ }
-
-  /**
-   * Get schedule for a specific entity (convenience wrapper).
-   */
-  async getEntitySchedule(
-    entityType: 'instructor' | 'room' | 'group',
-    entityId: string,
-    dateRange: DateRange,
-  ): Promise<MaterializedOccurrence[]> { /* ... */ }
-}
-```
-
-### 2.6 Built-in constraints: `packages/backend/src/constraints/`
-
-**`overlap.constraint.ts`** — Detects instructor and room double-bookings.
-
-```typescript
-@Injectable()
-export class OverlapConstraint extends ScheduleConstraint {
-  readonly type = 'overlap';
-  readonly description = 'Detects time overlaps for instructors and rooms';
-
-  async evaluate(occurrences: MaterializedOccurrence[], context: ConstraintContext): Promise<Conflict[]> {
-    // Group occurrences by instructor, check pairwise overlaps
-    // Group occurrences by room, check pairwise overlaps
-    // Return conflicts for each violation
-  }
-}
-```
-
-**`capacity.constraint.ts`** — Checks room capacity against group size.
-
-**`availability.constraint.ts`** — Checks events against entity availability rules.
-
-### 2.7 DTO validation: `packages/backend/src/dto/`
-
-Use `class-validator` decorators. One DTO per major operation:
-
-- `create-event.dto.ts` — validates title, startTime, durationMin > 0, optional RRULE string
-- `update-event.dto.ts` — partial version of create
-- `create-exception.dto.ts` — validates exception type, originalDate
-- `create-availability.dto.ts` — validates entity references, time ranges, hardness
-- `query-filter.dto.ts` — validates date ranges, entity ID arrays
-- `create-entity.dto.ts` — validates room/instructor/group/course creation
-
-Each DTO should have a static `validate(data: unknown): ValidationResult` method that doesn't require class instantiation (so consumers without class-transformer can still validate).
-
-### 2.8 Validation
-
-```bash
-bun run typecheck  # All services compile
-bun test           # Unit tests for RecurrenceService (at minimum)
-```
+### Verification (Phase 1)
+- `bun run test` shows >85% coverage for `packages/backend/src/services/`.
+- `coursekit-react` Storybook (if present) renders `TimetableGrid` with both 6-block-HFU and a generic 8-slot config.
 
 ---
 
-## Phase 3 — Prisma Adapters
+## Phase 2 — CourseKit StarPlan Adapter (open source)
 
-**Goal:** One Prisma adapter class per storage interface. All use structural typing — define `PrismaDelegate` shapes locally.
+This is the core of the open-source rework: every StarPlan-aware feature today scattered across `splan-api/` and `api/src/splan/` lands in CourseKit.
 
-### 3.1 Structural typing pattern
+### 2.1 New package `@hfu.digital/coursekit-starplan`
+- Path: `CourseKit/packages/starplan/`. Add to `pnpm-workspace.yaml` (or `bun` workspaces) and `turbo.json`.
+- `package.json` peer-deps: `@hfu.digital/coursekit-nestjs` (storage interfaces only; no NestJS dependency itself — keeps the package framework-agnostic).
 
-Each adapter defines the Prisma delegate shape it expects. Example for events:
+### 2.2 Lifted modules
+| Source | Destination | Adaptation |
+|---|---|---|
+| `splan-api/src/common/utils/ical-parser.ts` | `coursekit-starplan/src/parser/ical.ts` | Add **RRULE extraction** (currently splan-api treats each event standalone). Use `rrule` package already in CourseKit deps. |
+| `splan-api/src/common/utils/content-hash.ts` (`generateContentHash`) | `coursekit-starplan/src/identity/content-hash.ts` | Pure function. Unchanged. |
+| `splan-api/src/common/utils/content-hash.ts` (`parseRoomLocation`, `extractInstructorFromDescription`) | `coursekit-starplan/src/extract/` | **Parameterize** — accept a `RegexPatternSet` so non-HFU users can configure. Default export = HFU patterns. |
+| `splan-api/src/sync/starplan-client.ts` | `coursekit-starplan/src/client/starplan-client.ts` | `StarPlanClient` constructor takes `{ baseUrl, planningUnit, locale }`. No hardcoded HFU URL. |
+| `splan-api/src/sync/sync.service.ts` | `coursekit-starplan/src/sync/sync-service.ts` | Becomes framework-agnostic class that takes storage adapters from `coursekit-nestjs`. Cron scheduling moves to consumer (api/). |
 
-```typescript
-// packages/backend/src/adapters/prisma-event.adapter.ts
+### 2.3 Generic ChangeLog
+- `coursekit-starplan/src/changes/change-detector.ts` — given previous and next entity snapshots, produces `ChangeRecord[]` with `entityType`, `entityId`, `action`, `previousData`, `newData`, `changedFields`.
+- `coursekit-starplan/src/changes/change-storage.interface.ts` — abstract storage for change log persistence.
+- Prisma adapter: `coursekit-starplan/src/adapters/prisma-change-log.adapter.ts` (structural typing, expects `prisma.ckStarPlanChangeLog` delegate).
+- Emits `coursekit.starplan.change.detected` events via injected `EventEmitter`. **api/** subscribes (Phase 4).
 
-type PrismaEventDelegate = {
-  create: (args: { data: any }) => Promise<any>;
-  findUnique: (args: { where: any; include?: any }) => Promise<any>;
-  findMany: (args: { where?: any; include?: any }) => Promise<any[]>;
-  update: (args: { where: any; data: any }) => Promise<any>;
-  delete: (args: { where: any }) => Promise<any>;
-};
+### 2.4 RRULE expansion
+- New `coursekit-starplan/src/recurrence/rrule-expander.ts` — given parsed iCal events, produces a normalized stream of `(eventDef, recurrenceRule)` pairs that map cleanly to `CkTimetableEvent.recurrenceRule`. Handles RFC 5545 edge cases (BYDAY, COUNT, UNTIL, EXDATE).
+- Replaces "stored as string" hack currently in `api/src/splan/starplan-ical-parser.ts`.
 
-type PrismaExceptionDelegate = {
-  create: (args: { data: any }) => Promise<any>;
-  findMany: (args: { where?: any }) => Promise<any[]>;
-  delete: (args: { where: any }) => Promise<any>;
-};
+### 2.5 In-memory + Prisma adapters
+- In-memory adapter for testing in `coursekit-starplan/src/testing/memory-starplan.adapter.ts`.
+- Prisma adapter that uses **the same `Ck*` tables** already in `api/`. Schema additions documented for consumer migration:
+  ```prisma
+  model CkStarPlanProgram { /* existing CkProgram extended with starplanId? icalHash? */ }
+  model CkStarPlanChangeLog { id String @id; entityType String; entityId String; action String; previousData Json?; newData Json?; changedFields String[]; syncLogId String?; createdAt DateTime; }
+  ```
+- Provide a `prisma/migrations/coursekit-starplan-2026-04.sql` template consumers can copy.
 
-// ... similar for EventInstructor, EventGroup delegates
+### 2.6 Tests
+- `coursekit-starplan/src/__tests__/`: parser fixtures (real HFU iCal samples + synthetic edge cases), content-hash idempotency, RRULE expansion, change detection diff correctness.
+- Use `bun:test` to match the rest of CourseKit.
 
-export class PrismaTimetableEventAdapter extends TimetableEventStorage {
-  constructor(
-    private readonly eventDelegate: PrismaEventDelegate,
-    private readonly exceptionDelegate: PrismaExceptionDelegate,
-    private readonly instructorDelegate: PrismaEventInstructorDelegate,
-    private readonly groupDelegate: PrismaEventGroupDelegate,
-  ) { super(); }
-
-  // Implement all abstract methods
-}
-```
-
-### 3.2 Create one adapter per entity
-
-| File | Class | Implements |
-|------|-------|-----------|
-| `prisma-event.adapter.ts` | `PrismaTimetableEventAdapter` | `TimetableEventStorage` |
-| `prisma-room.adapter.ts` | `PrismaRoomAdapter` | `RoomStorage` |
-| `prisma-instructor.adapter.ts` | `PrismaInstructorAdapter` | `InstructorStorage` |
-| `prisma-group.adapter.ts` | `PrismaGroupAdapter` | `GroupStorage` |
-| `prisma-availability.adapter.ts` | `PrismaAvailabilityAdapter` | `AvailabilityStorage` |
-| `prisma-period.adapter.ts` | `PrismaAcademicPeriodAdapter` | `AcademicPeriodStorage` |
-| `prisma-course.adapter.ts` | `PrismaCourseAdapter` | `CourseStorage` |
-| `prisma-location-distance.adapter.ts` | `PrismaLocationDistanceAdapter` | `LocationDistanceStorage` |
-
-### 3.3 Consumer usage pattern (for README)
-
-```typescript
-// In the host app's module:
-import { PrismaClient } from '@prisma/client';
-import { CourseKitModule, PrismaTimetableEventAdapter, PrismaRoomAdapter /* ... */ } from '@hfu.digital/coursekit-nestjs';
-
-const prisma = new PrismaClient();
-
-@Module({
-  imports: [
-    CourseKitModule.register({
-      eventStorage: new PrismaTimetableEventAdapter(
-        prisma.timetableEvent,
-        prisma.eventException,
-        prisma.eventInstructor,
-        prisma.eventGroup,
-      ),
-      roomStorage: new PrismaRoomAdapter(prisma.room),
-      instructorStorage: new PrismaInstructorAdapter(prisma.instructor),
-      // ... etc
-    }),
-  ],
-})
-export class AppModule {}
-```
-
-### 3.4 Validation
-
-```bash
-bun run typecheck  # Adapters compile against the abstract classes
-```
+### Verification (Phase 2)
+- `cd CourseKit/packages/starplan && bun run test` passes with >80% coverage.
+- Integration test: feed a real HFU iCal sample through the full pipeline (parse → expand → upsert into in-memory storage → run again with modified sample → assert ChangeLog entries match expected diff).
 
 ---
 
-## Phase 4 — NestJS DynamicModule
+## Phase 3 — CourseKit StarPlan NestJS Controllers (optional package)
 
-**Goal:** `CourseKitModule.register()` wires everything together.
+### 3.1 New package `@hfu.digital/coursekit-starplan-nestjs`
+- Path: `CourseKit/packages/starplan-nestjs/`.
+- Depends on `coursekit-starplan` + `coursekit-nestjs`. Peer deps: NestJS 10–11.
+- Exports `StarPlanModule.register({ ...adapters, authGuard?, throttlerConfig? })`.
 
-### 4.1 `packages/backend/src/module.ts`
+### 3.2 Public read endpoints (mirror splan-api/v1/*)
+Controllers and DTOs ported from `splan-api/src/`:
 
-```typescript
-import { DynamicModule, Module, type Provider } from '@nestjs/common';
-import { EventEmitterModule } from '@nestjs/event-emitter';
+| Endpoint | Source | Notes |
+|---|---|---|
+| `GET /programs` | `splan-api/src/programs/` | Pagination, archived filter, search |
+| `GET /programs/:id/semesters` | same | |
+| `GET /programs/:id/courses` | same | weekday/studyBlock/date filters |
+| `GET /semesters` | same | |
+| `GET /courses`, `GET /courses/:id` | same | accept UUID or contentHash |
+| `GET /rooms`, `GET /rooms/:id/availability` | same | |
+| `GET /instructors` | same | |
+| `GET /week/current`, `GET /week/:week`, `GET /week/:week/rooms` | same | ISO week parsing in CourseKit |
+| `GET /search?q&type` | same | min 2 chars |
+| `GET /changes`, `GET /changes/:id` | same | reads from generic ChangeLog from 2.3 |
+| `GET /ical/:semesterId`, `GET /ical/:semesterId/url` | same | uses CourseKit RecurrenceService |
+| `GET /export/programs`, `GET /export/semesters/:id`, `GET /export/courses`, `POST /export/custom` | same | json/csv/ical |
+| `GET /sync/status` | new | reports last successful sync from `SyncLog` |
+| `GET /statistics` | same | aggregate counts |
 
-// Storage interfaces
-import { TimetableEventStorage } from './interfaces/event-storage.interface.js';
-import { RoomStorage } from './interfaces/room-storage.interface.js';
-import { InstructorStorage } from './interfaces/instructor-storage.interface.js';
-import { GroupStorage } from './interfaces/group-storage.interface.js';
-import { AvailabilityStorage } from './interfaces/availability-storage.interface.js';
-import { AcademicPeriodStorage } from './interfaces/period-storage.interface.js';
-import { CourseStorage } from './interfaces/course-storage.interface.js';
-import { LocationDistanceStorage } from './interfaces/location-distance-storage.interface.js';
-import { ScheduleConstraint } from './interfaces/constraint.interface.js';
+### 3.3 Auth/throttling pluggability
+- Constructor option `authGuard: Type<CanActivate>` — consumer (api/) supplies its own (developer-key, JWT, session). No auth shipped in CourseKit beyond an `AllowAnonymousGuard` example.
+- Constructor option `throttlerConfig?: ThrottlerOptions` — defaults to splan-api's 10/sec/60/min/1000/hour for parity.
+- Constructor option `apiPrefix?: string` — defaults to `/v1/starplan`. Consumer can mount under any path.
 
-// Domain services
-import { RecurrenceService } from './domain/recurrence.service.js';
-import { TimeService } from './domain/time.service.js';
-import { AvailabilityService } from './domain/availability.service.js';
-import { ConflictService } from './domain/conflict.service.js';
-import { QueryService } from './domain/query.service.js';
+### 3.4 OpenAPI
+- Inline `@nestjs/swagger` decorators on every controller. Consumer mounts Swagger at their preferred path.
+- Tag groups: `programs`, `semesters`, `courses`, `rooms`, `instructors`, `week`, `search`, `changes`, `ical`, `export`, `sync`.
 
-// Built-in constraints
-import { OverlapConstraint } from './constraints/overlap.constraint.js';
-import { CapacityConstraint } from './constraints/capacity.constraint.js';
-import { AvailabilityConstraint } from './constraints/availability.constraint.js';
+### 3.5 Tests
+- e2e tests using NestJS testing module + in-memory CourseKit adapters. Run with `bun:test`.
 
-export interface CourseKitModuleOptions {
-  eventStorage: TimetableEventStorage;
-  roomStorage: RoomStorage;
-  instructorStorage: InstructorStorage;
-  groupStorage: GroupStorage;
-  availabilityStorage: AvailabilityStorage;
-  periodStorage: AcademicPeriodStorage;
-  courseStorage: CourseStorage;
-  locationDistanceStorage?: LocationDistanceStorage;
-  /** Additional custom constraints beyond the built-ins */
-  constraints?: ScheduleConstraint[];
-  /** Set false to disable built-in constraints (default: true) */
-  enableBuiltInConstraints?: boolean;
-}
-
-@Module({})
-export class CourseKitModule {
-  static register(options: CourseKitModuleOptions): DynamicModule {
-    const builtInConstraints: ScheduleConstraint[] =
-      options.enableBuiltInConstraints !== false
-        ? [new OverlapConstraint(), new CapacityConstraint(), new AvailabilityConstraint()]
-        : [];
-
-    const allConstraints = [...builtInConstraints, ...(options.constraints ?? [])];
-
-    const storageProviders: Provider[] = [
-      { provide: TimetableEventStorage, useValue: options.eventStorage },
-      { provide: RoomStorage, useValue: options.roomStorage },
-      { provide: InstructorStorage, useValue: options.instructorStorage },
-      { provide: GroupStorage, useValue: options.groupStorage },
-      { provide: AvailabilityStorage, useValue: options.availabilityStorage },
-      { provide: AcademicPeriodStorage, useValue: options.periodStorage },
-      { provide: CourseStorage, useValue: options.courseStorage },
-      { provide: 'SCHEDULE_CONSTRAINTS', useValue: allConstraints },
-    ];
-
-    if (options.locationDistanceStorage) {
-      storageProviders.push({
-        provide: LocationDistanceStorage,
-        useValue: options.locationDistanceStorage,
-      });
-    }
-
-    return {
-      module: CourseKitModule,
-      imports: [EventEmitterModule.forRoot()],
-      providers: [
-        ...storageProviders,
-        RecurrenceService,
-        TimeService,
-        AvailabilityService,
-        ConflictService,
-        QueryService,
-      ],
-      exports: [
-        RecurrenceService,
-        TimeService,
-        AvailabilityService,
-        ConflictService,
-        QueryService,
-        TimetableEventStorage,
-        RoomStorage,
-        InstructorStorage,
-        GroupStorage,
-        AvailabilityStorage,
-        AcademicPeriodStorage,
-        CourseStorage,
-      ],
-    };
-  }
-}
-```
-
-### 4.2 Barrel export: `packages/backend/src/index.ts`
-
-```typescript
-// Module
-export { CourseKitModule, type CourseKitModuleOptions } from './module.js';
-
-// Domain services
-export { RecurrenceService } from './domain/recurrence.service.js';
-export { TimeService } from './domain/time.service.js';
-export { AvailabilityService } from './domain/availability.service.js';
-export { ConflictService } from './domain/conflict.service.js';
-export { QueryService } from './domain/query.service.js';
-
-// Storage interfaces (for custom adapter authors)
-export { TimetableEventStorage } from './interfaces/event-storage.interface.js';
-export { RoomStorage } from './interfaces/room-storage.interface.js';
-export { InstructorStorage } from './interfaces/instructor-storage.interface.js';
-export { GroupStorage } from './interfaces/group-storage.interface.js';
-export { AvailabilityStorage } from './interfaces/availability-storage.interface.js';
-export { AcademicPeriodStorage } from './interfaces/period-storage.interface.js';
-export { CourseStorage } from './interfaces/course-storage.interface.js';
-export { LocationDistanceStorage } from './interfaces/location-distance-storage.interface.js';
-export { ScheduleConstraint, type ConstraintContext } from './interfaces/constraint.interface.js';
-
-// Prisma adapters
-export { PrismaTimetableEventAdapter } from './adapters/prisma-event.adapter.js';
-export { PrismaRoomAdapter } from './adapters/prisma-room.adapter.js';
-export { PrismaInstructorAdapter } from './adapters/prisma-instructor.adapter.js';
-export { PrismaGroupAdapter } from './adapters/prisma-group.adapter.js';
-export { PrismaAvailabilityAdapter } from './adapters/prisma-availability.adapter.js';
-export { PrismaAcademicPeriodAdapter } from './adapters/prisma-period.adapter.js';
-export { PrismaCourseAdapter } from './adapters/prisma-course.adapter.js';
-export { PrismaLocationDistanceAdapter } from './adapters/prisma-location-distance.adapter.js';
-
-// Types (everything consumers need for type safety)
-export type * from './interfaces/types.js';
-
-// Domain events (for typed subscribers)
-export { DOMAIN_EVENTS } from './interfaces/domain-events.interface.js';
-export type * from './interfaces/domain-events.interface.js';
-
-// DTOs
-export { CreateEventDto } from './dto/create-event.dto.js';
-export { UpdateEventDto } from './dto/update-event.dto.js';
-export { CreateExceptionDto } from './dto/create-exception.dto.js';
-export { CreateAvailabilityDto } from './dto/create-availability.dto.js';
-export { QueryFilterDto } from './dto/query-filter.dto.js';
-```
-
-### 4.3 Validation
-
-```bash
-bun run build      # Full build: JS + declarations
-bun run typecheck  # No errors
-```
+### Verification (Phase 3)
+- Spin up a minimal example app in `CourseKit/examples/starplan-server/` that mounts `StarPlanModule` against in-memory adapters, hits each endpoint with `curl`, validates response shape against published OpenAPI.
 
 ---
 
-## Phase 5 — Testing Utilities (Tier 2, but ship early)
+## Phase 4 — api/: Developer-Key + Webhook Layer (HFU-specific)
 
-**Goal:** Provide in-memory adapters + factories so consumers (and we) can test without a database.
+This is the HFU-specific layer that wraps CourseKit's open-source primitives.
 
-### 5.1 Directory: `packages/backend/src/testing/`
+### 4.1 Database migration: lift Developer / Webhook / WebhookDelivery / UsageLog from splan-api → api/
+- Add to `api/prisma/schema.prisma`:
+  ```prisma
+  model Developer { id String @id; email String @unique; apiKey String @unique; apiKeyHint String; isActive Boolean; createdAt DateTime; updatedAt DateTime; webhooks Webhook[]; usageLogs UsageLog[] }
+  model UsageLog { id String @id; developerId String; endpoint String; method String; statusCode Int; createdAt DateTime; developer Developer @relation(fields:[developerId], references:[id]); @@index([developerId, createdAt]) }
+  model Webhook { id String @id; developerId String; url String; secret String; isActive Boolean; filterScope String?; filterProgramId String?; filterSemesterId String?; filterCourseId String?; filterRoomId String?; filterInstructorId String?; eventTypes String[]; deliveries WebhookDelivery[]; developer Developer @relation(fields:[developerId], references:[id]) }
+  model WebhookDelivery { id String @id; webhookId String; eventType String; payload Json; status String; attempts Int; nextRetryAt DateTime?; responseCode Int?; createdAt DateTime; deliveredAt DateTime?; webhook Webhook @relation(fields:[webhookId], references:[id]); @@index([status, nextRetryAt]) }
+  ```
+- Migration script `prisma/migrations/2026_xxxx_starplan_developer_layer/`.
 
-| File | Purpose |
-|------|---------|
-| `memory-event-storage.adapter.ts` | `Map`-based `TimetableEventStorage` |
-| `memory-room-storage.adapter.ts` | `Map`-based `RoomStorage` |
-| `memory-instructor-storage.adapter.ts` | `Map`-based `InstructorStorage` |
-| `memory-group-storage.adapter.ts` | `Map`-based `GroupStorage` |
-| `memory-availability-storage.adapter.ts` | `Map`-based `AvailabilityStorage` |
-| `memory-period-storage.adapter.ts` | `Map`-based `AcademicPeriodStorage` |
-| `memory-course-storage.adapter.ts` | `Map`-based `CourseStorage` |
-| `factories.ts` | `createTestEvent()`, `createTestRoom()`, etc. with sensible defaults + overrides |
-| `fixtures.ts` | Pre-built scenarios: "simple school week", "university semester with conflicts" |
-| `event-spy.ts` | Captures emitted domain events for assertions |
-| `assertions.ts` | `expectNoConflicts()`, `expectConflict()` helpers |
-| `index.ts` | Barrel export for the `./testing` subpath |
+### 4.2 Modules
+- `api/src/starplan-developer/` — controllers + service for `/v1/starplan/developers/*` and `/v1/starplan/webhooks/*` (lifted from `splan-api/src/developers/` and `splan-api/src/webhooks/`).
+- `api/src/starplan-developer/webhook-delivery.service.ts` — cron every 30s, exponential backoff `[0s, 1m, 5m, 15m]`, HMAC-SHA256 signature, lifted verbatim from splan-api.
 
-### 5.2 In-memory adapter pattern
+### 4.3 DeveloperKeyAuthGuard
+- `api/src/starplan-developer/developer-key.guard.ts` — validates `X-API-Key` header against `Developer.apiKey`, sets `req.developer`, logs to `UsageLog`.
+- Extends `JwtOrBetterAuthGuard` pattern: `DeveloperKeyOrAnonymousGuard` for endpoints that allow either keyed or anonymous (with stricter rate limits for anonymous).
 
-Each in-memory adapter uses a `Map<string, Entity>` and generates `cuid()`-style IDs:
+### 4.4 Change subscription bridge
+- `api/src/starplan-notifications/` — listens for `coursekit.starplan.change.detected` events from CourseKit:
+    - **Discord push:** publishes through existing `discordLogsApi` to relevant guilds.
+    - **In-app feed:** writes to a new `UserChangeFeed` Prisma table per affected user (resolved via `ckCourseId` → user subscriptions).
+    - **HFU webhook fan-out:** queues `WebhookDelivery` rows for matching webhook filters.
+- Schema:
+  ```prisma
+  model UserChangeFeed { id String @id; userId String; changeLogId String; readAt DateTime?; createdAt DateTime; user User @relation(fields:[userId], references:[id]); @@index([userId, readAt, createdAt]) }
+  ```
 
-```typescript
-export class InMemoryTimetableEventStorage extends TimetableEventStorage {
-  private events = new Map<string, TimetableEvent>();
-  private exceptions = new Map<string, EventException>();
-  // ...
+### 4.5 Audit
+- Every developer registration, key rotation, webhook CRUD writes to existing `AuditLog` (already in `api/`).
 
-  async create(data) {
-    const event = { ...data, id: crypto.randomUUID(), version: 0, createdAt: new Date(), updatedAt: new Date() };
-    this.events.set(event.id, event);
-    return event;
-  }
-  // ... implement all abstract methods
-}
-```
-
-### 5.3 Barrel: `packages/backend/src/testing/index.ts`
-
-```typescript
-// In-memory adapters
-export { InMemoryTimetableEventStorage } from './memory-event-storage.adapter.js';
-export { InMemoryRoomStorage } from './memory-room-storage.adapter.js';
-// ... all adapters
-
-// Factories
-export { createTestEvent, createTestRoom, createTestInstructor, /* ... */ } from './factories.js';
-
-// Fixtures
-export { simpleSchoolWeek, universitySemester, edgeCaseSchedule } from './fixtures.js';
-
-// Test helpers
-export { EventSpy } from './event-spy.js';
-export { expectNoConflicts, expectConflict } from './assertions.js';
-```
+### Verification (Phase 4)
+- e2e test in `api/test/starplan-developer.e2e-spec.ts`: register dev → receive key → call `/v1/starplan/programs` with key → observe `UsageLog` entry; create webhook → trigger a change → assert `WebhookDelivery` queued and signed correctly.
 
 ---
 
-## Phase 6 — Frontend Package (Tier 2)
+## Phase 5 — api/: Mount StarPlan Controllers + Cron + Remove Old Scraper
 
-**Goal:** Ship `@hfu.digital/coursekit-react` with a provider, headless hooks, and minimal components.
+### 5.1 Replace `coursekit/coursekit-registration.module.ts` with combined module
+- New `api/src/coursekit/coursekit.module.ts` imports both `CourseKitModule.register(...)` and `StarPlanModule.register(...)` from `coursekit-starplan-nestjs`, wired with the same Prisma adapters (now also adapter for the new ChangeLog model).
+- Mount `StarPlanModule` controllers at `/v1/starplan/*` via `apiPrefix` option from Phase 3.3.
+- `authGuard: DeveloperKeyOrAnonymousGuard` from Phase 4.3.
 
-### 6.1 `packages/frontend/src/context/CourseKitProvider.tsx`
+### 5.2 Cron orchestration
+- `api/src/starplan-sync/starplan-sync.service.ts` — `@Cron(EVERY_5_MINUTES)` calls the framework-agnostic `SyncService` from `coursekit-starplan` with HFU-configured `StarPlanClient` (HFU's `splan.hs-furtwangen.de` base URL, planning unit `5`).
+- Uses NestJS DI to provide CourseKit storage adapters.
 
-```typescript
-import { createContext, useContext, type ReactNode } from 'react';
+### 5.3 Delete duplicate code
+- Remove `api/src/splan/starplan-scraper.service.ts`.
+- Remove `api/src/splan/starplan-ical-parser.ts`.
+- Remove `api/src/splan/starplan-ical-cache.service.ts`.
+- Keep `api/src/splan/splan.service.ts` and `splan.controller.ts` only for the **HFU-specific** user features — split-lecture preferences, course visibility, variant selection. Rename to `api/src/me-timetable/*` for clarity (see Phase 6 wiring).
 
-export interface CourseKitConfig {
-  apiUrl: string;
-  /** Optional: custom fetch function for auth headers, etc. */
-  fetch?: typeof globalThis.fetch;
-}
+### 5.4 Drop `Ck*` ↔ legacy `Course/Program/Semester` bridge
+- Plan a follow-up data migration: backfill `ckCourseId` for all rows; switch all reads to `Ck*`; drop legacy `Course/Program/Semester` tables in a later release window. **Not in this phase** — flag as Phase 9 task.
 
-const CourseKitContext = createContext<CourseKitConfig | null>(null);
-
-export const useCourseKitConfig = () => {
-  const ctx = useContext(CourseKitContext);
-  if (!ctx) throw new Error('Wrap your app in <CourseKitProvider>');
-  return ctx;
-};
-
-export const CourseKitProvider = ({
-  apiUrl, fetch, children,
-}: CourseKitConfig & { children: ReactNode }) => (
-  <CourseKitContext.Provider value={{ apiUrl, fetch }}>
-    {children}
-  </CourseKitContext.Provider>
-);
-```
-
-### 6.2 Hooks (implement in order)
-
-| Hook | File | Description |
-|------|------|-------------|
-| `useTimetable` | `hooks/useTimetable.ts` | Fetch schedule for entity + date range |
-| `useAvailability` | `hooks/useAvailability.ts` | Fetch free/busy for entity |
-| `useConflictCheck` | `hooks/useConflictCheck.ts` | Real-time conflict preview for proposed event |
-| `useMutation` | `hooks/useMutation.ts` | Create/update/delete events with optimistic updates |
-| `useRoomSearch` | `hooks/useRoomSearch.ts` | Search rooms by capacity, equipment, availability |
-
-All hooks use the `apiUrl` + `fetch` from `CourseKitProvider`. Use plain `fetch` — no tanstack-query dependency (consumers can wrap if they want).
-
-### 6.3 Components (implement after hooks are stable)
-
-| Component | File | Description |
-|-----------|------|-------------|
-| `TimetableGrid` | `components/TimetableGrid.tsx` | Week/day grid view, configurable time axis |
-| `EventCard` | `components/EventCard.tsx` | Single event display, accepts `className` |
-| `ConflictBadge` | `components/ConflictBadge.tsx` | Visual conflict indicator |
-| `AvailabilityOverlay` | `components/AvailabilityOverlay.tsx` | Free/busy overlay on grid |
-
-All components accept `className` prop. No hardcoded CSS framework. Ship minimal inline defaults.
-
-### 6.4 Barrel: `packages/frontend/src/index.ts`
-
-```typescript
-export { CourseKitProvider, useCourseKitConfig, type CourseKitConfig } from './context/CourseKitProvider.js';
-export { useTimetable } from './hooks/useTimetable.js';
-export { useAvailability } from './hooks/useAvailability.js';
-export { useConflictCheck } from './hooks/useConflictCheck.js';
-export { useMutation } from './hooks/useMutation.js';
-export { useRoomSearch } from './hooks/useRoomSearch.js';
-export { TimetableGrid } from './components/TimetableGrid.js';
-export { EventCard } from './components/EventCard.js';
-export { ConflictBadge } from './components/ConflictBadge.js';
-export { AvailabilityOverlay } from './components/AvailabilityOverlay.js';
-```
+### Verification (Phase 5)
+- `bun run test` in `api/` passes.
+- Hit `https://api.hfu.digital/v1/starplan/programs` (staging) — gets same shape as old `splan-api/v1/programs`.
+- 5-minute cron fires; `SyncLog` rows appear; `CkTimetableEvent` rows update; `CkStarPlanChangeLog` rows are written when iCal hash changes.
+- `api/src/splan/starplan-scraper.service.ts` no longer in repo.
 
 ---
 
-## Phase 7 — README, Schema Reference, Docs
+## Phase 6 — website/: User Hub Rebuild (hard cutover)
 
-**Goal:** Complete the README with everything a consumer needs to integrate.
+This is the user-visible heart of the project. Single PR replaces the existing thin `/me/timetable` and `/me/courses` with a full hub.
 
-### 7.1 README sections (in order)
+### 6.1 Add CourseKit dependencies
+- `website/package.json`:
+  ```json
+  "@hfu.digital/coursekit-react": "2026.04.1",
+  "@hfu.digital/coursekit-nestjs": "2026.04.1"
+  ```
+- Wrap app in `<CourseKitProvider apiBase="/api" fetch={authedFetch} />` in `app/providers.tsx`.
 
-1. **Overview** — "A timetable engine for academic scheduling: recurring events, conflict detection, availability management, and a React frontend. Ships as `@hfu.digital/coursekit-nestjs` + `@hfu.digital/coursekit-react`."
-2. **Prerequisites** — Bun ≥ 1.0, NestJS ≥ 10, React ≥ 18
-3. **Installation** — `bun add @hfu.digital/coursekit-nestjs @hfu.digital/coursekit-react`
-4. **Prisma Schema Reference** — The full schema from the feature plan (copy the `model` blocks verbatim)
-5. **Backend Integration** — `CourseKitModule.register()` example with all Prisma adapters
-6. **Frontend Integration** — `<CourseKitProvider>` setup + hook examples
-7. **Custom Adapter Guide** — How to implement storage interfaces for TypeORM/Drizzle/Knex
-8. **Built-in Constraints** — What ships out of the box, how to add custom ones
-9. **RRULE Examples** — Common recurrence patterns for academic scheduling
-10. **Testing** — How to use the `@hfu.digital/coursekit-nestjs/testing` subpath
-11. **API Reference** — Key exports, service methods, types
-12. **Development** — `bun install` → `bun run build` → `bun run dev`
+### 6.2 Routes
+| Route | Replaces / new | Source of features |
+|---|---|---|
+| `/me/timetable` | replaces hand-rolled grid | better-splan `/timetable` + CourseKit `<TimetableGrid>` |
+| `/me/courses` | new (currently a list page) | better-splan `/settings`: search, show/hide, variant select, semester selection, enroll/unenroll in additional courses |
+| `/me/calendar` | new | better-splan `/calendar`: generate iCal feed URL, revoke, regenerate, include-hidden toggle, access stats |
+| `/me/changes` | new | timeline of `UserChangeFeed` entries from Phase 4.4 |
+| `/me/timetable` (week query) | uses `?week=YYYY-Www` | navigation arrows, "today" button |
 
----
+### 6.3 Components
+Replace bespoke with `coursekit-react`:
+- Drop `website/components/timetable/weekly-grid.tsx` → `<TimetableGrid />`
+- Drop `website/components/timetable/event-card.tsx` → `<EventCard />`
+- New `<ConflictBadge />` shown on overlapping events
+- New `<StudyBlockGrid />` for HFU's 6-block layout (configured via prop)
 
-## Phase 8 — Integration Validation
+Port from better-splan (will land in `coursekit-react` itself, contributed back open source):
+- `<CourseList />` (cards with visibility toggle + variant selector)
+- `<PreferencesDiffDialog />` (local-vs-cloud conflict UX)
+- `<WeekPicker />`
+- `<SemesterPicker />`
 
-**Goal:** Verify the full library works end-to-end before publishing.
+### 6.4 Hooks
+Use new hooks from Phase 1.3:
+- `useTimetable({ week })` → `/api/v1/starplan/week/:week` filtered to user's subscribed `ckCourseId`s server-side.
+- `useCourseSubscriptions()` → list current courses + visibility/variant.
+- `useMutation` wrappers for `subscribe`, `unsubscribe`, `setVisibility`, `selectVariant`, `setSemester`.
+- `useChanges({ since, scope: 'me' })` → `/api/v1/starplan/changes?scope=me&since=...`.
+- `useICalFeed()` for `/me/calendar`.
 
-### 8.1 Write integration tests using the testing utilities
+### 6.5 HFU-specific user endpoints in api/
+The "personal" features in better-splan today live at `/splan/courses`, `/splan/preferences/*`, `/splan/ical/*`. Reorganize under `/me/timetable/*`:
+- `GET /me/timetable/courses` → user's `CkCourse` subscriptions with visibility + selected variants
+- `PATCH /me/timetable/courses/:ckCourseId` → set visibility / variant
+- `POST /me/timetable/courses/:ckCourseId/subscribe`
+- `DELETE /me/timetable/courses/:ckCourseId/subscribe`
+- `POST /me/timetable/preferences/compare` (local vs db diff)
+- `POST /me/timetable/preferences/apply`
+- `GET/POST/PATCH/DELETE /me/timetable/ical` — HFU-specific iCal feed with revocation
+- `GET /me/timetable/changes` → user-scoped `UserChangeFeed`
+- `PATCH /me/timetable/changes/:id/read` → mark read
+- `PATCH /me/timetable/semester` → user picks current semester (writes `User.semesterId`)
 
-```typescript
-// packages/backend/src/__tests__/integration.test.ts
-import { Test } from '@nestjs/testing';
-import { CourseKitModule } from '../module.js';
-import {
-  InMemoryTimetableEventStorage,
-  InMemoryRoomStorage,
-  // ... all in-memory adapters
-  createTestEvent,
-  createTestRoom,
-} from '../testing/index.js';
+### 6.6 i18n
+- Carry over German + English keys from better-splan's `I18nProvider`. Adopt `next-intl` or replicate the existing custom provider pattern in website.
+- This is the first user-facing area on website with full DE support; document the convention.
 
-describe('CourseKit Integration', () => {
-  it('should detect instructor double-booking', async () => { /* ... */ });
-  it('should materialize recurring events with exceptions', async () => { /* ... */ });
-  it('should respect availability constraints', async () => { /* ... */ });
-  it('should find free slots across multiple entities', async () => { /* ... */ });
-  it('should emit domain events on mutations', async () => { /* ... */ });
-});
-```
+### 6.7 Preferences sync
+Lift better-splan's local↔cloud diff system:
+- `useLocalPreferences` (localStorage `hfu-timetable-preferences`)
+- On login or first open, call `/me/timetable/preferences/compare`; if diffs, show `<PreferencesDiffDialog>` with options *use local / use db / merge*.
 
-### 8.2 Full validation checklist
+### 6.8 Hard cutover checklist
+- Old `/me/timetable/page.tsx` deleted in same PR.
+- Old `/api/splan/timetable` removed (or aliased to `/v1/starplan/week/:week` with user filtering).
+- Single PR. Reviewer must verify visually: weekly grid renders, course list editable, calendar feed works, change feed populates after a manual scrape trigger.
 
-```bash
-bun install
-bun run typecheck         # Zero errors in both packages
-bun run build             # Produces dist/ with JS + .d.ts in both packages
-bun test                  # All tests pass
-ls packages/backend/dist  # Verify index.js, index.d.ts, testing/index.js, testing/index.d.ts exist
-ls packages/frontend/dist # Verify index.js, index.es.js, index.d.ts exist
-```
-
----
-
-## Appendix A — File Checklist
-
-Complete file listing for the `packages/backend/src/` directory at the end of Tier 1 + early Tier 2:
-
-```
-src/
-├── index.ts                                    # Main barrel export
-├── module.ts                                   # CourseKitModule.register()
-├── domain/
-│   ├── recurrence.service.ts                   # RRULE materialization
-│   ├── time.service.ts                         # Time overlap utilities
-│   ├── availability.service.ts                 # Availability CRUD + checks
-│   ├── conflict.service.ts                     # Constraint evaluation engine
-│   └── query.service.ts                        # Schedule queries + free slots
-├── interfaces/
-│   ├── types.ts                                # ALL entity types
-│   ├── event-storage.interface.ts              # TimetableEventStorage
-│   ├── room-storage.interface.ts               # RoomStorage
-│   ├── instructor-storage.interface.ts         # InstructorStorage
-│   ├── group-storage.interface.ts              # GroupStorage
-│   ├── availability-storage.interface.ts       # AvailabilityStorage
-│   ├── period-storage.interface.ts             # AcademicPeriodStorage
-│   ├── course-storage.interface.ts             # CourseStorage
-│   ├── location-distance-storage.interface.ts  # LocationDistanceStorage
-│   ├── constraint.interface.ts                 # ScheduleConstraint contract
-│   └── domain-events.interface.ts              # Typed event payloads
-├── adapters/
-│   ├── prisma-event.adapter.ts
-│   ├── prisma-room.adapter.ts
-│   ├── prisma-instructor.adapter.ts
-│   ├── prisma-group.adapter.ts
-│   ├── prisma-availability.adapter.ts
-│   ├── prisma-period.adapter.ts
-│   ├── prisma-course.adapter.ts
-│   └── prisma-location-distance.adapter.ts
-├── dto/
-│   ├── create-event.dto.ts
-│   ├── update-event.dto.ts
-│   ├── create-exception.dto.ts
-│   ├── create-availability.dto.ts
-│   ├── create-entity.dto.ts
-│   └── query-filter.dto.ts
-├── constraints/
-│   ├── overlap.constraint.ts
-│   ├── capacity.constraint.ts
-│   └── availability.constraint.ts
-├── testing/
-│   ├── index.ts
-│   ├── memory-event-storage.adapter.ts
-│   ├── memory-room-storage.adapter.ts
-│   ├── memory-instructor-storage.adapter.ts
-│   ├── memory-group-storage.adapter.ts
-│   ├── memory-availability-storage.adapter.ts
-│   ├── memory-period-storage.adapter.ts
-│   ├── memory-course-storage.adapter.ts
-│   ├── factories.ts
-│   ├── fixtures.ts
-│   ├── event-spy.ts
-│   └── assertions.ts
-└── __tests__/
-    ├── recurrence.service.test.ts
-    ├── conflict.service.test.ts
-    ├── query.service.test.ts
-    └── integration.test.ts
-```
+### Verification (Phase 6)
+- Run `bun run dev` in website, log in, see populated `/me/timetable`.
+- `/me/courses`: toggle a course off, refresh → grid no longer shows it.
+- `/me/courses`: search and add an additional course outside user's primary semester → new subscription persists.
+- `/me/calendar`: generate iCal URL → fetch from external client (Google Calendar) → renders.
+- `/me/changes`: trigger an admin sync (modify mapping or wait for cron) → new entry appears.
+- Lighthouse a11y > 95 on `/me/timetable`.
 
 ---
 
-## Appendix B — Deviations from Generic Kit Skill
+## Phase 7 — better-splan/: Strip to Public Landing
 
-| Generic Kit Skill Pattern | CourseKit Adaptation | Reason |
-|--------------------------|---------------------|--------|
-| Single `KitStorage` abstract class | 8 split storage interfaces | Feature plan decision: per-entity granularity |
-| `tsc` for full JS build | `bun build --target=bun` + `tsc --emitDeclarationOnly` | Bun-only runtime target |
-| `"module": "commonjs"` in tsconfig | `"module": "ESNext"`, `"moduleResolution": "bundler"` | No Node consumers to support |
-| No event emitter | `@nestjs/event-emitter` as peerDependency | Feature plan 1.9 |
-| No validation library | `class-validator` + `class-transformer` as peers | Feature plan 1.7 |
-| No domain dependencies | `rrule` as bundled dependency | Feature plan 1.5 — RRULE materialization |
-| Single barrel export | Main export + `./testing` subpath export | Testing utilities separated for tree-shaking |
-| `"pipeline"` in turbo.json | `"tasks"` in turbo.json | Turborepo v2 API change |
+### 7.1 Removed routes
+- `/timetable` (auth-gated personal view)
+- `/settings` (course settings)
+- `/calendar` (iCal feed management)
+- `/admin/*` (split-lecture admin)
+- All Discord auth flow files.
+
+### 7.2 Kept routes
+- `/` — landing
+- `/programs` — public list
+- `/programs/[programId]/[semesterId]` — public timetable
+- `/teachers`, `/teachers/[teacherId]`
+- `/rooms`, `/rooms/[roomId]`
+
+### 7.3 API client rewrite
+- Replace `splan-api.ts` (currently pointing to `splan.dev.hfu.digital/api/v1`) with calls to `api.hfu.digital/v1/starplan/*`.
+- Remove `api.ts` (HFU-authenticated client) entirely.
+- Drop `public-api.ts` / keep only the parts still relevant (e.g., footer links).
+- Drop `hooks/usePreferencesSync`, `useUserCourses`, `useICalFeed`, `useAuth`.
+
+### 7.4 Navigation + branding
+- Header CTA "Sign in for personal timetable" → `https://hfu.digital/me/timetable`.
+- Remove Discord login button.
+- Footer link "API for developers" → `https://api.hfu.digital/v1/starplan/docs`.
+
+### 7.5 Reuse via `coursekit-react`
+Now that `<TimetableGrid />` is in CourseKit, better-splan adopts it too — single source of truth for the grid layout.
+
+### Verification (Phase 7)
+- `bun run dev` in better-splan: all kept routes work without any auth.
+- No imports of `@/lib/api.ts` (removed) anywhere.
+- No `signInWithDiscord` references.
+- No 404s when navigating from landing to programs to a semester page.
 
 ---
 
-## Appendix C — Open Decisions for Claude Code to Resolve During Implementation
+## Phase 8 — splan-api/ Retirement
 
-These are minor decisions that can be made during implementation. Document your choice in a comment.
+### 8.1 Data migration
+- One-time script `scripts/migrate-splan-api-to-api.ts`:
+    - Copy `Developer`, `Webhook`, `WebhookDelivery`, `UsageLog` from splan-api DB → api DB.
+    - Skip-on-conflict by `email` for `Developer` (manual reconciliation list emitted).
+- Run on staging; verify counts; run on production during maintenance window.
 
-1. **ID generation in in-memory adapters:** `crypto.randomUUID()` vs `cuid2`. Recommendation: `crypto.randomUUID()` — zero dependencies.
-2. **DTO validation approach:** Pure `class-validator` decorators vs. static `validate()` methods that work without class instantiation. Recommendation: ship both — decorators for NestJS pipe users, static method for everyone else.
-3. **`bun build` entry points:** The `--splitting` flag with multiple entry points (`src/index.ts` + `src/testing/index.ts`). Test that this produces correct chunk splitting. If it doesn't, fall back to two separate `bun build` invocations.
-4. **RRULE `dtstart` handling:** `rrule.js` uses UTC by default. Ensure `materialize()` correctly maps between event `startTime` and RRULE `dtstart`. Add explicit tests for DST transitions.
+### 8.2 DNS / ingress
+- `splan.dev.hfu.digital` → 301 redirect to `api.hfu.digital`.
+- Per-endpoint redirect map (`/api/v1/programs` → `/v1/starplan/programs`, etc.) at the load-balancer layer.
+
+### 8.3 Deployment teardown
+- Remove splan-api Kubernetes/Compose service.
+- Drop splan-api PostgreSQL database (after a 14-day backup retention window).
+- Archive `splan-api/` repo with a README pointing to `api/v1/starplan/*`.
+
+### 8.4 Email developers
+- Send notification to all `Developer` rows: new endpoint base URL, identical schemas, X-API-Key header still works, 6-month grace period during which 301 redirects are honored.
+
+### Verification (Phase 8)
+- `curl https://splan.dev.hfu.digital/api/v1/programs` → 301 → `https://api.hfu.digital/v1/starplan/programs` returning identical JSON.
+- All `Webhook` rows still firing (manual test via "test webhook" endpoint).
+- splan-api deployment no longer exists in cluster.
+
+---
+
+## Phase 9 — Public Dev API Parity, Docs, Hardening
+
+### 9.1 OpenAPI parity
+- Confirm every endpoint from the splan-api OpenAPI is present in the new `/v1/starplan/*` Swagger.
+- Ship `public-docs/`-hosted migration guide:
+    - URL mapping table
+    - Auth header changes (none)
+    - Rate limit changes (parity)
+    - Pagination/parameter changes (none)
+
+### 9.2 Tests + rate limits
+- e2e suite covering the full `/v1/starplan/*` surface in `api/test/`.
+- Rate limits applied at NestJS `ThrottlerGuard`: 10/sec, 60/min, 1000/hour for keyed; stricter (5/sec, 30/min, 200/hour) for anonymous.
+- Tests for `/me/timetable/*` user endpoints — auth, ownership, rate limits.
+
+### 9.3 Audit logging
+- Audit entries on: developer registered/key rotated, webhook created/deleted, user changed semester, user toggled course visibility (debounced).
+
+### 9.4 Drop legacy bridges
+- Remove `Course/Program/Semester` legacy Prisma models. Backfill complete; all reads on `Ck*`.
+- Remove `Course.ckCourseId` (`Ck*` is now the canonical model).
+
+### 9.5 Versions cut
+- Tag `CourseKit` as `v2026.MM.1` (publish all four packages).
+- Pin `api/`, `website/`, `better-splan/` to that version.
+- Cut RoomKit, LoopKit, BoardKit at `v2026.MM.1` for consistency (no functional changes — just version alignment).
+
+### Verification (Phase 9)
+- `bun run test` in `api/` and `CourseKit/` passes with >85% line coverage on the StarPlan path.
+- Lighthouse + Biome lint clean across `website/`, `better-splan/`.
+- OpenAPI rendered at `https://api.hfu.digital/v1/starplan/docs` shows full surface.
+- Real iCal sample fed through cron → user receives change notification on Discord and `/me/changes`.
+
+---
+
+## Cross-cutting concerns
+
+### Documentation
+- This document is the canonical roadmap (`CourseKit/coursekit-implementation.md`).
+- Update `CLAUDE.md` files in every affected repo to reflect the new architecture as phases land.
+- Add `CourseKit/docs/starplan.md` walking through embedding the StarPlan adapter in any NestJS app.
+- Update `public-docs/` with the new `/v1/starplan/*` endpoints.
+
+### Authentication
+- No changes to Better-Auth setup. Discord OAuth + HFU SAML SSO continue to work for the website.
+- Developer-key auth for `/v1/starplan/*` is HFU-specific (Phase 4.3). CourseKit ships only an example anonymous guard.
+
+### Observability
+- Every CourseKit StarPlan domain event (`coursekit.starplan.*`) gets logged at INFO via the existing pino setup in api/.
+- Discord notifications and webhook deliveries gated behind feature config flags (env vars), per existing pattern.
+
+### Rollback
+Hard cutover rollback strategy (since no flag):
+- Each phase is one PR, revertable independently. Phase order is chosen so reverts are localized.
+- Phase 5–6 are the riskiest (user-visible). Pre-deploy rehearsal in staging required, with a recorded smoke test of the four `/me/*` routes before merging.
+
+### Open-source positioning
+- CourseKit's README markets `@hfu.digital/coursekit-starplan` as "drop-in StarPlan ingestion for any NestJS app". Default config targets HFU but every URL/regex is configurable.
+- Example app in `CourseKit/examples/starplan-server/` demonstrates a generic deployment.
+
+---
+
+## Critical Files Reference
+
+### CourseKit (most-changed)
+- `CourseKit/packages/backend/src/errors/` (new, Phase 0.3)
+- `CourseKit/packages/starplan/` (new package, Phase 2)
+- `CourseKit/packages/starplan-nestjs/` (new package, Phase 3)
+- `CourseKit/biome.json` (new, Phase 0.2)
+- `CourseKit/.github/workflows/publish.yml` (Phase 0.1)
+
+### api/
+- `api/prisma/schema.prisma` (Phases 4.1, 4.4, 9.4)
+- `api/src/coursekit/coursekit.module.ts` (Phase 5.1)
+- `api/src/starplan-sync/` (new, Phase 5.2)
+- `api/src/starplan-developer/` (new, Phase 4.2)
+- `api/src/starplan-notifications/` (new, Phase 4.4)
+- `api/src/me-timetable/` (renamed from `api/src/splan/`, Phase 6.5)
+- Removed: `api/src/splan/starplan-scraper.service.ts`, `starplan-ical-parser.ts`, `starplan-ical-cache.service.ts` (Phase 5.3)
+
+### website/
+- `website/app/me/timetable/page.tsx` (rewritten, Phase 6.2)
+- `website/app/me/courses/page.tsx` (rewritten, Phase 6.2)
+- `website/app/me/calendar/page.tsx` (new, Phase 6.2)
+- `website/app/me/changes/page.tsx` (new, Phase 6.2)
+- `website/components/timetable/*` (deleted, Phase 6.3)
+- `website/app/providers.tsx` (CourseKitProvider added, Phase 6.1)
+- `website/package.json` (deps added, Phase 6.1)
+
+### better-splan/
+- `better-splan/app/timetable/`, `/settings/`, `/calendar/`, `/admin/` (deleted, Phase 7.1)
+- `better-splan/lib/api.ts` (deleted, Phase 7.3)
+- `better-splan/lib/splan-api.ts` (rewritten to `api.hfu.digital/v1/starplan/*`, Phase 7.3)
+
+### Infra
+- DNS / load-balancer rules (Phase 8.2)
+- `splan-api/` archived (Phase 8.3)
+
+---
+
+## End-to-End Verification
+
+After Phase 9 ship:
+
+1. **Open-source flow:** clone CourseKit, follow `docs/starplan.md`, run `examples/starplan-server/` against a non-HFU StarPlan URL → endpoints return that institution's data.
+2. **Developer flow:** register at `https://api.hfu.digital/v1/starplan/developers/register`, receive key, hit `/v1/starplan/programs` with `X-API-Key` → same shape as old splan-api.
+3. **User flow:** log into `https://hfu.digital/me/timetable`, see weekly grid; go to `/me/courses`, change semester, add an additional course from another semester, mark a course as hidden; go to `/me/calendar`, copy iCal URL into Google Calendar, see entries appear; trigger an admin StarPlan resync → `/me/changes` shows what moved; receive Discord DM if subscribed.
+4. **Public browse:** visit `https://better-splan.hfu.digital/programs` (no login), see programs; navigate to a semester, see same `<TimetableGrid />` from CourseKit; no Discord login button anywhere.
+5. **Retired:** `https://splan.dev.hfu.digital/*` returns 301 to `api.hfu.digital/v1/starplan/*`.
+
+---
+
+## Out-of-scope (intentionally deferred)
+
+- **CourseKit conflict-detection REST endpoints** — `ConflictService` stays library-only this round; surfacing it via an admin REST endpoint can land in a follow-up.
+- **Mobile app integration** — `mobile/` continues using whatever it uses today; a follow-up project adopts `coursekit-react-native` (does not exist yet).
+- **Multi-tenant CourseKit hosting** — the StarPlan adapter is configurable per-instance, but multi-tenant hosting (one CourseKit serving many institutions concurrently) is not in scope.
+- **Authentication-mode rework** — Better-Auth keeps its current Discord/SAML/passkey/2FA setup. Re-verification cadence (the 4-month HFU SSO) is unchanged.

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useCourseKitConfig } from '../context/CourseKitProvider.js';
 
 export interface RoomSearchQuery {
@@ -32,33 +32,37 @@ export function useRoomSearch(initialQuery?: RoomSearchQuery): UseRoomSearchResu
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
-    const search = useCallback(async (query: RoomSearchQuery) => {
-        setLoading(true);
-        setError(null);
+    const search = useCallback(
+        async (query: RoomSearchQuery) => {
+            setLoading(true);
+            setError(null);
 
-        try {
-            const params = new URLSearchParams();
-            if (query.building) params.set('building', query.building);
-            if (query.campus) params.set('campus', query.campus);
-            if (query.minCapacity !== undefined) params.set('minCapacity', String(query.minCapacity));
-            if (query.availableAt) {
-                params.set('availableStart', query.availableAt.start);
-                params.set('availableEnd', query.availableAt.end);
+            try {
+                const params = new URLSearchParams();
+                if (query.building) params.set('building', query.building);
+                if (query.campus) params.set('campus', query.campus);
+                if (query.minCapacity !== undefined)
+                    params.set('minCapacity', String(query.minCapacity));
+                if (query.availableAt) {
+                    params.set('availableStart', query.availableAt.start);
+                    params.set('availableEnd', query.availableAt.end);
+                }
+
+                const response = await fetchFn(`${apiUrl}/rooms?${params.toString()}`);
+                if (!response.ok) {
+                    throw new Error(`Room search failed: ${response.status}`);
+                }
+
+                const data = await response.json();
+                setRooms(data);
+            } catch (err) {
+                setError(err instanceof Error ? err : new Error(String(err)));
+            } finally {
+                setLoading(false);
             }
-
-            const response = await fetchFn(`${apiUrl}/rooms?${params.toString()}`);
-            if (!response.ok) {
-                throw new Error(`Room search failed: ${response.status}`);
-            }
-
-            const data = await response.json();
-            setRooms(data);
-        } catch (err) {
-            setError(err instanceof Error ? err : new Error(String(err)));
-        } finally {
-            setLoading(false);
-        }
-    }, [apiUrl, fetchFn]);
+        },
+        [apiUrl, fetchFn],
+    );
 
     useEffect(() => {
         if (initialQuery) {

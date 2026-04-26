@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { QueryService } from '../domain/query.service.js';
 import { RecurrenceService } from '../domain/recurrence.service.js';
 import { TimeService } from '../domain/time.service.js';
-import { InMemoryTimetableEventStorage } from '../testing/memory-event-storage.adapter.js';
 import type { DateRange } from '../interfaces/types.js';
+import { InMemoryTimetableEventStorage } from '../testing/memory-event-storage.adapter.js';
 
 describe('QueryService', () => {
     function createService() {
@@ -119,14 +119,10 @@ describe('QueryService', () => {
             periodId: null,
         });
 
-        const result = await query.getEntitySchedule(
-            'room',
-            'room-1',
-            {
-                start: new Date('2026-03-01T00:00:00Z'),
-                end: new Date('2026-03-07T23:59:59Z'),
-            },
-        );
+        const result = await query.getEntitySchedule('room', 'room-1', {
+            start: new Date('2026-03-01T00:00:00Z'),
+            end: new Date('2026-03-07T23:59:59Z'),
+        });
 
         expect(result).toHaveLength(1);
     });

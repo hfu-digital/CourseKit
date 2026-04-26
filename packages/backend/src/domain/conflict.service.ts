@@ -1,16 +1,20 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import type { ConstraintContext, ScheduleConstraint } from '../interfaces/constraint.interface.js';
+import { DOMAIN_EVENTS } from '../interfaces/domain-events.interface.js';
 import { TimetableEventStorage } from '../interfaces/event-storage.interface.js';
-import { RoomStorage } from '../interfaces/room-storage.interface.js';
 import { GroupStorage } from '../interfaces/group-storage.interface.js';
-import { TimeService } from './time.service.js';
+import { RoomStorage } from '../interfaces/room-storage.interface.js';
+import type {
+    Conflict,
+    ConflictCheckResult,
+    DateRange,
+    MaterializedOccurrence,
+    TimetableEvent,
+} from '../interfaces/types.js';
 import { AvailabilityService } from './availability.service.js';
 import { RecurrenceService } from './recurrence.service.js';
-import { DOMAIN_EVENTS } from '../interfaces/domain-events.interface.js';
-import type { ScheduleConstraint, ConstraintContext } from '../interfaces/constraint.interface.js';
-import type {
-    TimetableEvent, ConflictCheckResult, DateRange, MaterializedOccurrence, Conflict,
-} from '../interfaces/types.js';
+import { TimeService } from './time.service.js';
 
 @Injectable()
 export class ConflictService {
@@ -52,8 +56,8 @@ export class ConflictService {
         }
 
         const result: ConflictCheckResult = {
-            hasErrors: allConflicts.some(c => c.severity === 'error'),
-            hasWarnings: allConflicts.some(c => c.severity === 'warning'),
+            hasErrors: allConflicts.some((c) => c.severity === 'error'),
+            hasWarnings: allConflicts.some((c) => c.severity === 'warning'),
             conflicts: allConflicts,
         };
 
@@ -123,8 +127,8 @@ export class ConflictService {
         }
 
         return {
-            hasErrors: allConflicts.some(c => c.severity === 'error'),
-            hasWarnings: allConflicts.some(c => c.severity === 'warning'),
+            hasErrors: allConflicts.some((c) => c.severity === 'error'),
+            hasWarnings: allConflicts.some((c) => c.severity === 'warning'),
             conflicts: allConflicts,
         };
     }
@@ -135,11 +139,11 @@ export class ConflictService {
             allEvents,
             getInstructorsForEvent: async (eventId: string) => {
                 const instructors = await this.eventStorage.findInstructors(eventId);
-                return instructors.map(i => i.instructorId);
+                return instructors.map((i) => i.instructorId);
             },
             getGroupsForEvent: async (eventId: string) => {
                 const groups = await this.eventStorage.findGroups(eventId);
-                return groups.map(g => g.groupId);
+                return groups.map((g) => g.groupId);
             },
             getRoomById: async (roomId: string) => {
                 return this.roomStorage.findById(roomId);

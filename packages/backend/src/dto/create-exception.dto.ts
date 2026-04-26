@@ -1,4 +1,13 @@
-import { IsString, IsNotEmpty, IsDateString, IsOptional, IsNumber, IsIn, IsPositive, Min } from 'class-validator';
+import {
+    IsDateString,
+    IsIn,
+    IsNotEmpty,
+    IsNumber,
+    IsOptional,
+    IsPositive,
+    IsString,
+    Min,
+} from 'class-validator';
 import type { ValidationResult } from '../interfaces/types.js';
 
 export class CreateExceptionDto {
@@ -43,12 +52,23 @@ export class CreateExceptionDto {
             errors.push({ field: 'eventId', message: 'eventId is required', value: d.eventId });
         }
 
-        if (!d.originalDate || (typeof d.originalDate !== 'string' && !(d.originalDate instanceof Date))) {
-            errors.push({ field: 'originalDate', message: 'originalDate is required', value: d.originalDate });
+        if (
+            !d.originalDate ||
+            (typeof d.originalDate !== 'string' && !(d.originalDate instanceof Date))
+        ) {
+            errors.push({
+                field: 'originalDate',
+                message: 'originalDate is required',
+                value: d.originalDate,
+            });
         }
 
         if (!d.type || !['cancelled', 'modified', 'added'].includes(d.type as string)) {
-            errors.push({ field: 'type', message: 'type must be one of: cancelled, modified, added', value: d.type });
+            errors.push({
+                field: 'type',
+                message: 'type must be one of: cancelled, modified, added',
+                value: d.type,
+            });
         }
 
         return { valid: errors.length === 0, errors };

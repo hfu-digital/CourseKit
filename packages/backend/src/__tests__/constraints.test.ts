@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'bun:test';
-import { CapacityConstraint } from '../constraints/capacity.constraint.js';
+import { describe, expect, it } from 'bun:test';
 import { AvailabilityConstraint } from '../constraints/availability.constraint.js';
-import { createTestEvent, createTestRoom } from '../testing/factories.js';
+import { CapacityConstraint } from '../constraints/capacity.constraint.js';
 import type { ConstraintContext } from '../interfaces/constraint.interface.js';
-import type { TimetableEvent, MaterializedOccurrence, Room } from '../interfaces/types.js';
+import type { MaterializedOccurrence, Room, TimetableEvent } from '../interfaces/types.js';
+import { createTestEvent, createTestRoom } from '../testing/factories.js';
 
 function makeOccurrence(event: TimetableEvent): MaterializedOccurrence {
     return {
@@ -42,7 +42,7 @@ describe('CapacityConstraint', () => {
         const context: ConstraintContext = {
             ...makeBaseContext([event]),
             getGroupsForEvent: async () => ['group-1'],
-            getRoomById: async (roomId: string) => roomId === room.id ? room : null,
+            getRoomById: async (roomId: string) => (roomId === room.id ? room : null),
             getGroupStudentCount: async () => 35,
         };
 
@@ -63,7 +63,7 @@ describe('CapacityConstraint', () => {
         const context: ConstraintContext = {
             ...makeBaseContext([event]),
             getGroupsForEvent: async () => ['group-1'],
-            getRoomById: async (roomId: string) => roomId === room.id ? room : null,
+            getRoomById: async (roomId: string) => (roomId === room.id ? room : null),
             getGroupStudentCount: async () => 25,
         };
 
@@ -132,19 +132,21 @@ describe('AvailabilityConstraint', () => {
                 if (entityType === 'instructor' && entityId === 'instructor-1') {
                     return {
                         available: false,
-                        conflicts: [{
-                            id: 'block-1',
-                            entityType: 'instructor',
-                            entityId: 'instructor-1',
-                            dayOfWeek: null,
-                            specificDate: null,
-                            startTime: new Date('2026-03-02T08:00:00Z'),
-                            endTime: new Date('2026-03-02T12:00:00Z'),
-                            type: 'blocked' as const,
-                            hardness: 'hard' as const,
-                            priority: 0,
-                            recurrenceRule: null,
-                        }],
+                        conflicts: [
+                            {
+                                id: 'block-1',
+                                entityType: 'instructor',
+                                entityId: 'instructor-1',
+                                dayOfWeek: null,
+                                specificDate: null,
+                                startTime: new Date('2026-03-02T08:00:00Z'),
+                                endTime: new Date('2026-03-02T12:00:00Z'),
+                                type: 'blocked' as const,
+                                hardness: 'hard' as const,
+                                priority: 0,
+                                recurrenceRule: null,
+                            },
+                        ],
                     };
                 }
                 return { available: true, conflicts: [] };
@@ -168,19 +170,21 @@ describe('AvailabilityConstraint', () => {
                 if (entityType === 'room' && entityId === 'room-1') {
                     return {
                         available: false,
-                        conflicts: [{
-                            id: 'block-1',
-                            entityType: 'room',
-                            entityId: 'room-1',
-                            dayOfWeek: null,
-                            specificDate: null,
-                            startTime: new Date('2026-03-02T08:00:00Z'),
-                            endTime: new Date('2026-03-02T12:00:00Z'),
-                            type: 'blocked' as const,
-                            hardness: 'soft' as const,
-                            priority: 0,
-                            recurrenceRule: null,
-                        }],
+                        conflicts: [
+                            {
+                                id: 'block-1',
+                                entityType: 'room',
+                                entityId: 'room-1',
+                                dayOfWeek: null,
+                                specificDate: null,
+                                startTime: new Date('2026-03-02T08:00:00Z'),
+                                endTime: new Date('2026-03-02T12:00:00Z'),
+                                type: 'blocked' as const,
+                                hardness: 'soft' as const,
+                                priority: 0,
+                                recurrenceRule: null,
+                            },
+                        ],
                     };
                 }
                 return { available: true, conflicts: [] };
@@ -220,19 +224,21 @@ describe('AvailabilityConstraint', () => {
                 if (unavailableEntities.has(entityId)) {
                     return {
                         available: false,
-                        conflicts: [{
-                            id: `block-${entityId}`,
-                            entityType,
-                            entityId,
-                            dayOfWeek: null,
-                            specificDate: null,
-                            startTime: new Date('2026-03-02T08:00:00Z'),
-                            endTime: new Date('2026-03-02T12:00:00Z'),
-                            type: 'blocked' as const,
-                            hardness: 'hard' as const,
-                            priority: 0,
-                            recurrenceRule: null,
-                        }],
+                        conflicts: [
+                            {
+                                id: `block-${entityId}`,
+                                entityType,
+                                entityId,
+                                dayOfWeek: null,
+                                specificDate: null,
+                                startTime: new Date('2026-03-02T08:00:00Z'),
+                                endTime: new Date('2026-03-02T12:00:00Z'),
+                                type: 'blocked' as const,
+                                hardness: 'hard' as const,
+                                priority: 0,
+                                recurrenceRule: null,
+                            },
+                        ],
                     };
                 }
                 return { available: true, conflicts: [] };
@@ -242,7 +248,7 @@ describe('AvailabilityConstraint', () => {
         const conflicts = await constraint.evaluate(occurrences, context);
         // Should have conflicts for both instructor and room
         expect(conflicts.length).toBe(2);
-        const entityTypes = conflicts.map(c => c.metadata.entityType);
+        const entityTypes = conflicts.map((c) => c.metadata.entityType);
         expect(entityTypes).toContain('instructor');
         expect(entityTypes).toContain('room');
     });

@@ -1,0 +1,57 @@
+{
+    "name": "@hfu.digital/coursekit-starplan",
+    "version": "2026.04.1",
+    "description": "Open-source StarPlan integration for CourseKit — iCal parsing, content hashing, change detection, and RRULE expansion. Framework-agnostic.",
+    "license": "MIT",
+    "author": "hfu-digital",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/hfu-digital/CourseKit",
+        "directory": "packages/starplan"
+    },
+    "homepage": "https://github.com/hfu-digital/CourseKit#readme",
+    "bugs": {
+        "url": "https://github.com/hfu-digital/CourseKit/issues"
+    },
+    "keywords": [
+        "starplan",
+        "timetable",
+        "ical",
+        "academic",
+        "scheduling",
+        "coursekit",
+        "hfu"
+    ],
+    "type": "module",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./dist/index.js",
+            "require": "./dist/index.js",
+            "default": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "publishConfig": {
+        "access": "public",
+        "registry": "https://registry.npmjs.org/"
+    },
+    "scripts": {
+        "build": "tsc --outDir dist",
+        "dev": "tsc --outDir dist --watch",
+        "typecheck": "tsc --noEmit",
+        "test": "bun test",
+        "prepublishOnly": "bun run build"
+    },
+    "dependencies": {
+        "rrule": "^2.8.1"
+    },
+    "devDependencies": {
+        "typescript": "^5.7.0",
+        "@types/bun": "latest"
+    }
+}

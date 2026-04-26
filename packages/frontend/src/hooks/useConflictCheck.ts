@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useCourseKitConfig } from '../context/CourseKitProvider.js';
 
 export interface ProposedEvent {
@@ -31,7 +31,10 @@ export interface UseConflictCheckResult {
     result: ConflictCheckResult | null;
     loading: boolean;
     error: Error | null;
-    check: (event: ProposedEvent, dateRange: { start: string; end: string }) => Promise<ConflictCheckResult | null>;
+    check: (
+        event: ProposedEvent,
+        dateRange: { start: string; end: string },
+    ) => Promise<ConflictCheckResult | null>;
 }
 
 export function useConflictCheck(): UseConflictCheckResult {
@@ -42,35 +45,38 @@ export function useConflictCheck(): UseConflictCheckResult {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
-    const check = useCallback(async (
-        event: ProposedEvent,
-        dateRange: { start: string; end: string },
-    ): Promise<ConflictCheckResult | null> => {
-        setLoading(true);
-        setError(null);
+    const check = useCallback(
+        async (
+            event: ProposedEvent,
+            dateRange: { start: string; end: string },
+        ): Promise<ConflictCheckResult | null> => {
+            setLoading(true);
+            setError(null);
 
-        try {
-            const response = await fetchFn(`${apiUrl}/conflicts/check`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ event, dateRange }),
-            });
+            try {
+                const response = await fetchFn(`${apiUrl}/conflicts/check`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ event, dateRange }),
+                });
 
-            if (!response.ok) {
-                throw new Error(`Conflict check failed: ${response.status}`);
+                if (!response.ok) {
+                    throw new Error(`Conflict check failed: ${response.status}`);
+                }
+
+                const data = await response.json();
+                setResult(data);
+                return data;
+            } catch (err) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                setError(error);
+                return null;
+            } finally {
+                setLoading(false);
             }
-
-            const data = await response.json();
-            setResult(data);
-            return data;
-        } catch (err) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            setError(error);
-            return null;
-        } finally {
-            setLoading(false);
-        }
-    }, [apiUrl, fetchFn]);
+        },
+        [apiUrl, fetchFn],
+    );
 
     return { result, loading, error, check };
 }

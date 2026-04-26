@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useCourseKitConfig } from '../context/CourseKitProvider.js';
 
 export interface AvailabilityQuery {

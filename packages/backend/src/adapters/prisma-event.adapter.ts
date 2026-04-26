@@ -1,6 +1,11 @@
+import { VersionConflictError } from '../errors/index.js';
 import { TimetableEventStorage } from '../interfaces/event-storage.interface.js';
 import type {
-    TimetableEvent, EventException, EventInstructor, EventGroup, ScheduleQuery,
+    EventException,
+    EventGroup,
+    EventInstructor,
+    ScheduleQuery,
+    TimetableEvent,
 } from '../interfaces/types.js';
 
 // Structural typing — never import @prisma/client
@@ -14,7 +19,10 @@ type PrismaEventDelegate = {
 
 type PrismaExceptionDelegate = {
     create: (args: { data: any }) => Promise<any>;
+    findUnique: (args: { where: any }) => Promise<any>;
     findMany: (args: { where?: any }) => Promise<any[]>;
+    update: (args: { where: any; data: any }) => Promise<any>;
+    updateMany: (args: { where: any; data: any }) => Promise<{ count: number }>;
     delete: (args: { where: any }) => Promise<any>;
 };
 
@@ -42,7 +50,9 @@ export class PrismaTimetableEventAdapter extends TimetableEventStorage {
         super();
     }
 
-    async create(data: Omit<TimetableEvent, 'id' | 'createdAt' | 'updatedAt' | 'version'>): Promise<TimetableEvent> {
+    async create(
+        data: Omit<TimetableEvent, 'id' | 'createdAt' | 'updatedAt' | 'version'>,
+    ): Promise<TimetableEvent> {
         return this.eventDelegate.create({
             data: {
                 ...data,
@@ -103,7 +113,11 @@ export class PrismaTimetableEventAdapter extends TimetableEventStorage {
         return this.eventDelegate.findMany({ where });
     }
 
-    async update(id: string, data: Partial<TimetableEvent>, expectedVersion?: number): Promise<TimetableEvent> {
+    async update(
+        id: string,
+        data: Partial<TimetableEvent>,
+        expectedVersion?: number,
+    ): Promise<TimetableEvent> {
         const where: any = { id };
 
         if (expectedVersion !== undefined) {
@@ -130,6 +144,26 @@ export class PrismaTimetableEventAdapter extends TimetableEventStorage {
 
     async findExceptions(eventId: string): Promise<EventException[]> {
         return this.exceptionDelegate.findMany({ where: { eventId } });
+    }
+
+    async updateException(
+        id: string,
+        data: Partial<EventException>,
+        expectedVersion?: number,
+    ): Promise<EventException> {
+        if (expectedVersion === undefined) {
+            return this.exceptionDelegate.update({ where: { id }, data });
+        }
+        const result = await this.exceptionDelegate.updateMany({
+            where: { id, version: expectedVersion },
+            data: { ...data, version: expectedVersion + 1 },
+        });
+        if (result.count === 0) {
+            const current = await this.exceptionDelegate.findUnique({ where: { id } });
+            const actual = current?.version ?? -1;
+            throw new VersionConflictError('EventException', id, expectedVersion, actual);
+        }
+        return this.exceptionDelegate.findUnique({ where: { id } });
     }
 
     async deleteException(id: string): Promise<void> {

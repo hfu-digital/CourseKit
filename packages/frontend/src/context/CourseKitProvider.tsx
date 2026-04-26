@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, type ReactNode, useContext } from 'react';
 
 export interface CourseKitConfig {
     apiUrl: string;
@@ -19,7 +19,5 @@ export const CourseKitProvider = ({
     fetch,
     children,
 }: CourseKitConfig & { children: ReactNode }) => (
-    <CourseKitContext.Provider value={{ apiUrl, fetch }}>
-        {children}
-    </CourseKitContext.Provider>
+    <CourseKitContext.Provider value={{ apiUrl, fetch }}>{children}</CourseKitContext.Provider>
 );

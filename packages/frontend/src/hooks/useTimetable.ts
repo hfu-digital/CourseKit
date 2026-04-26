@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useCourseKitConfig } from '../context/CourseKitProvider.js';
 
 export interface TimetableQuery {
@@ -10,19 +10,26 @@ export interface TimetableQuery {
     periodId?: string;
 }
 
+/**
+ * Mirror of `OccurrenceDto` from `@hfu.digital/coursekit-nestjs`.
+ * Kept in sync manually so the React package stays free of a runtime dep on
+ * the backend package.
+ */
 export interface TimetableOccurrence {
     eventId: string;
     occurrenceDate: string;
     startTime: string;
+    endTime: string;
     durationMin: number;
     roomId: string | null;
     metadata: Record<string, unknown> | null;
     isException: boolean;
     exceptionType: 'cancelled' | 'modified' | 'added' | null;
-    originalEvent: {
+    event: {
         id: string;
         title: string;
-        [key: string]: unknown;
+        courseId: string | null;
+        periodId: string | null;
     };
 }
 
@@ -51,7 +58,8 @@ export function useTimetable(query: TimetableQuery | null): UseTimetableResult {
             const params = new URLSearchParams();
             params.set('startDate', query.dateRange.start);
             params.set('endDate', query.dateRange.end);
-            if (query.instructorIds?.length) params.set('instructorIds', query.instructorIds.join(','));
+            if (query.instructorIds?.length)
+                params.set('instructorIds', query.instructorIds.join(','));
             if (query.roomIds?.length) params.set('roomIds', query.roomIds.join(','));
             if (query.groupIds?.length) params.set('groupIds', query.groupIds.join(','));
             if (query.courseIds?.length) params.set('courseIds', query.courseIds.join(','));

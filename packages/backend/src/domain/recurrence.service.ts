@@ -4,9 +4,17 @@ import * as rruleModule from 'rrule';
 
 // CJS/ESM interop: rrule is a UMD bundle without an exports map,
 // so Node.js ESM can't resolve named exports directly
-const rruleNs = ('default' in rruleModule ? (rruleModule as any).default : rruleModule) as typeof rruleModule;
+const rruleNs = (
+    'default' in rruleModule ? (rruleModule as any).default : rruleModule
+) as typeof rruleModule;
 const { RRule, RRuleSet, rrulestr } = rruleNs;
-import type { TimetableEvent, EventException, MaterializedOccurrence, DateRange } from '../interfaces/types.js';
+
+import type {
+    DateRange,
+    EventException,
+    MaterializedOccurrence,
+    TimetableEvent,
+} from '../interfaces/types.js';
 
 @Injectable()
 export class RecurrenceService {
@@ -136,10 +144,7 @@ export class RecurrenceService {
     /**
      * For a non-recurring event, return a single occurrence if it falls in the range.
      */
-    materializeSingle(
-        event: TimetableEvent,
-        dateRange: DateRange,
-    ): MaterializedOccurrence | null {
+    materializeSingle(event: TimetableEvent, dateRange: DateRange): MaterializedOccurrence | null {
         const eventEnd = new Date(event.startTime.getTime() + event.durationMin * 60_000);
 
         // Event overlaps with date range if it starts before range ends AND ends after range starts

@@ -2,15 +2,21 @@
     "name": "coursekit",
     "private": true,
     "packageManager": "bun@1.2.23",
-    "workspaces": ["packages/*", "examples/*"],
+    "workspaces": [
+        "packages/*",
+        "examples/*"
+    ],
     "devDependencies": {
-        "turbo": "^2.0.0"
+        "turbo": "^2.0.0",
+        "@biomejs/biome": "2.3.2"
     },
     "scripts": {
         "build": "turbo build",
         "dev": "turbo dev",
         "lint": "turbo lint",
         "typecheck": "turbo typecheck",
-        "test": "turbo test"
+        "test": "turbo test",
+        "check": "biome check .",
+        "check:fix": "biome check --write ."
     }
 }

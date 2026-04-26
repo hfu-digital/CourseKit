@@ -1,3 +1,4 @@
+import { EntityNotFoundError } from '../errors/index.js';
 import { GroupStorage } from '../interfaces/group-storage.interface.js';
 import type { Group, StudentGroup } from '../interfaces/types.js';
 
@@ -18,14 +19,14 @@ export class InMemoryGroupStorage extends GroupStorage {
     async findAll(filters?: { type?: Group['type'] }): Promise<Group[]> {
         let results = Array.from(this.groups.values());
         if (filters?.type) {
-            results = results.filter(g => g.type === filters.type);
+            results = results.filter((g) => g.type === filters.type);
         }
         return results;
     }
 
     async update(id: string, data: Partial<Group>): Promise<Group> {
         const existing = this.groups.get(id);
-        if (!existing) throw new Error(`Group ${id} not found`);
+        if (!existing) throw new EntityNotFoundError('Group', id);
         const updated: Group = { ...existing, ...data, id };
         this.groups.set(id, updated);
         return updated;
@@ -50,10 +51,10 @@ export class InMemoryGroupStorage extends GroupStorage {
     }
 
     async findStudents(groupId: string): Promise<StudentGroup[]> {
-        return Array.from(this.studentGroups.values()).filter(sg => sg.groupId === groupId);
+        return Array.from(this.studentGroups.values()).filter((sg) => sg.groupId === groupId);
     }
 
     async findGroupsForStudent(studentId: string): Promise<StudentGroup[]> {
-        return Array.from(this.studentGroups.values()).filter(sg => sg.studentId === studentId);
+        return Array.from(this.studentGroups.values()).filter((sg) => sg.studentId === studentId);
     }
 }

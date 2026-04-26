@@ -1,11 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EntityNotFoundError } from '../errors/index.js';
 import { AvailabilityStorage } from '../interfaces/availability-storage.interface.js';
-import { RecurrenceService } from './recurrence.service.js';
 import { DOMAIN_EVENTS } from '../interfaces/domain-events.interface.js';
 import type {
-    Availability, AvailabilityEntityType, DateRange, FreeSlot,
+    Availability,
+    AvailabilityEntityType,
+    DateRange,
+    FreeSlot,
 } from '../interfaces/types.js';
+import { RecurrenceService } from './recurrence.service.js';
 
 @Injectable()
 export class AvailabilityService {
@@ -24,7 +28,7 @@ export class AvailabilityService {
     async update(id: string, data: Partial<Availability>): Promise<Availability> {
         const previous = await this.storage.findById(id);
         if (!previous) {
-            throw new Error(`Availability with id ${id} not found`);
+            throw new EntityNotFoundError('Availability', id);
         }
         const current = await this.storage.update(id, data);
         this.eventEmitter.emit(DOMAIN_EVENTS.AVAILABILITY_UPDATED, { previous, current });
@@ -34,7 +38,7 @@ export class AvailabilityService {
     async delete(id: string): Promise<void> {
         const availability = await this.storage.findById(id);
         if (!availability) {
-            throw new Error(`Availability with id ${id} not found`);
+            throw new EntityNotFoundError('Availability', id);
         }
         await this.storage.delete(id);
         this.eventEmitter.emit(DOMAIN_EVENTS.AVAILABILITY_DELETED, { availability });
@@ -65,7 +69,7 @@ export class AvailabilityService {
         }
 
         // If there are hard blocks, entity is unavailable
-        const hardBlocks = conflicts.filter(c => c.hardness === 'hard');
+        const hardBlocks = conflicts.filter((c) => c.hardness === 'hard');
         if (hardBlocks.length > 0) {
             return { available: false, conflicts: hardBlocks };
         }
@@ -142,7 +146,9 @@ export class AvailabilityService {
         return rule.startTime < end && rule.endTime > start;
     }
 
-    private mergeIntervals(intervals: Array<{ start: Date; end: Date }>): Array<{ start: Date; end: Date }> {
+    private mergeIntervals(
+        intervals: Array<{ start: Date; end: Date }>,
+    ): Array<{ start: Date; end: Date }> {
         if (intervals.length === 0) return [];
 
         const result: Array<{ start: Date; end: Date }> = [{ ...intervals[0] }];

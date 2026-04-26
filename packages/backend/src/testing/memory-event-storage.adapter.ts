@@ -1,6 +1,11 @@
+import { EntityNotFoundError, VersionConflictError } from '../errors/index.js';
 import { TimetableEventStorage } from '../interfaces/event-storage.interface.js';
 import type {
-    TimetableEvent, EventException, EventInstructor, EventGroup, ScheduleQuery,
+    EventException,
+    EventGroup,
+    EventInstructor,
+    ScheduleQuery,
+    TimetableEvent,
 } from '../interfaces/types.js';
 
 export class InMemoryTimetableEventStorage extends TimetableEventStorage {
@@ -9,7 +14,9 @@ export class InMemoryTimetableEventStorage extends TimetableEventStorage {
     private instructors = new Map<string, EventInstructor>();
     private groups = new Map<string, EventGroup>();
 
-    async create(data: Omit<TimetableEvent, 'id' | 'createdAt' | 'updatedAt' | 'version'>): Promise<TimetableEvent> {
+    async create(
+        data: Omit<TimetableEvent, 'id' | 'createdAt' | 'updatedAt' | 'version'>,
+    ): Promise<TimetableEvent> {
         const event: TimetableEvent = {
             ...data,
             id: crypto.randomUUID(),
@@ -29,15 +36,15 @@ export class InMemoryTimetableEventStorage extends TimetableEventStorage {
         let results = Array.from(this.events.values());
 
         if (query.courseIds?.length) {
-            results = results.filter(e => e.courseId && query.courseIds!.includes(e.courseId));
+            results = results.filter((e) => e.courseId && query.courseIds!.includes(e.courseId));
         }
 
         if (query.roomIds?.length) {
-            results = results.filter(e => e.roomId && query.roomIds!.includes(e.roomId));
+            results = results.filter((e) => e.roomId && query.roomIds!.includes(e.roomId));
         }
 
         if (query.periodId) {
-            results = results.filter(e => e.periodId === query.periodId);
+            results = results.filter((e) => e.periodId === query.periodId);
         }
 
         if (query.instructorIds?.length) {
@@ -47,7 +54,7 @@ export class InMemoryTimetableEventStorage extends TimetableEventStorage {
                     eventIds.add(inst.eventId);
                 }
             }
-            results = results.filter(e => eventIds.has(e.id));
+            results = results.filter((e) => eventIds.has(e.id));
         }
 
         if (query.groupIds?.length) {
@@ -57,18 +64,22 @@ export class InMemoryTimetableEventStorage extends TimetableEventStorage {
                     eventIds.add(grp.eventId);
                 }
             }
-            results = results.filter(e => eventIds.has(e.id));
+            results = results.filter((e) => eventIds.has(e.id));
         }
 
         return results;
     }
 
-    async update(id: string, data: Partial<TimetableEvent>, expectedVersion?: number): Promise<TimetableEvent> {
+    async update(
+        id: string,
+        data: Partial<TimetableEvent>,
+        expectedVersion?: number,
+    ): Promise<TimetableEvent> {
         const existing = this.events.get(id);
-        if (!existing) throw new Error(`Event ${id} not found`);
+        if (!existing) throw new EntityNotFoundError('Event', id);
 
         if (expectedVersion !== undefined && existing.version !== expectedVersion) {
-            throw new Error(`Version conflict: expected ${expectedVersion}, got ${existing.version}`);
+            throw new VersionConflictError('Event', id, expectedVersion, existing.version);
         }
 
         const updated: TimetableEvent = {
@@ -87,13 +98,29 @@ export class InMemoryTimetableEventStorage extends TimetableEventStorage {
     }
 
     async createException(data: Omit<EventException, 'id'>): Promise<EventException> {
-        const exception: EventException = { ...data, id: crypto.randomUUID() };
+        const exception: EventException = { ...data, id: crypto.randomUUID(), version: 0 };
         this.exceptions.set(exception.id, exception);
         return exception;
     }
 
     async findExceptions(eventId: string): Promise<EventException[]> {
-        return Array.from(this.exceptions.values()).filter(e => e.eventId === eventId);
+        return Array.from(this.exceptions.values()).filter((e) => e.eventId === eventId);
+    }
+
+    async updateException(
+        id: string,
+        data: Partial<EventException>,
+        expectedVersion?: number,
+    ): Promise<EventException> {
+        const existing = this.exceptions.get(id);
+        if (!existing) throw new EntityNotFoundError('EventException', id);
+        const currentVersion = existing.version ?? 0;
+        if (expectedVersion !== undefined && currentVersion !== expectedVersion) {
+            throw new VersionConflictError('EventException', id, expectedVersion, currentVersion);
+        }
+        const updated: EventException = { ...existing, ...data, id, version: currentVersion + 1 };
+        this.exceptions.set(id, updated);
+        return updated;
     }
 
     async deleteException(id: string): Promise<void> {
@@ -115,7 +142,7 @@ export class InMemoryTimetableEventStorage extends TimetableEventStorage {
     }
 
     async findInstructors(eventId: string): Promise<EventInstructor[]> {
-        return Array.from(this.instructors.values()).filter(i => i.eventId === eventId);
+        return Array.from(this.instructors.values()).filter((i) => i.eventId === eventId);
     }
 
     async addGroup(data: Omit<EventGroup, 'id'>): Promise<EventGroup> {
@@ -133,6 +160,6 @@ export class InMemoryTimetableEventStorage extends TimetableEventStorage {
     }
 
     async findGroups(eventId: string): Promise<EventGroup[]> {
-        return Array.from(this.groups.values()).filter(g => g.eventId === eventId);
+        return Array.from(this.groups.values()).filter((g) => g.eventId === eventId);
     }
 }

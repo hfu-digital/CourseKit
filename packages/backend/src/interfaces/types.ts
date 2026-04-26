@@ -26,6 +26,8 @@ export interface EventException {
     newDurationMin: number | null;
     newRoomId: string | null;
     metadata: Record<string, unknown> | null;
+    /** Optimistic-locking version. Adapters that don't track concurrency may default to 0. */
+    version?: number;
 }
 
 // ─── Join Tables ─────────────────────────────────────────────
@@ -103,6 +105,8 @@ export interface Availability {
     hardness: AvailabilityHardness;
     priority: number;
     recurrenceRule: string | null;
+    /** Optimistic-locking version. Adapters that don't track concurrency may default to 0. */
+    version?: number;
 }
 
 // ─── Academic Periods ────────────────────────────────────────
@@ -123,6 +127,8 @@ export interface LocationDistance {
     fromCampus: string;
     toCampus: string;
     travelMinutes: number;
+    /** Optimistic-locking version. Adapters that don't track concurrency may default to 0. */
+    version?: number;
 }
 
 // ─── Materialized Occurrence ────────────────────────────────

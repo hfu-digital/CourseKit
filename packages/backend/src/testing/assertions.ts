@@ -1,4 +1,4 @@
-import type { ConflictCheckResult, Conflict } from '../interfaces/types.js';
+import type { Conflict, ConflictCheckResult } from '../interfaces/types.js';
 
 /**
  * Assert that a conflict check result has no conflicts.
@@ -7,7 +7,7 @@ import type { ConflictCheckResult, Conflict } from '../interfaces/types.js';
 export function expectNoConflicts(result: ConflictCheckResult): void {
     if (result.conflicts.length > 0) {
         const details = result.conflicts
-            .map(c => `  - [${c.severity}] ${c.type}: ${c.message}`)
+            .map((c) => `  - [${c.severity}] ${c.type}: ${c.message}`)
             .join('\n');
         throw new Error(`Expected no conflicts, but found ${result.conflicts.length}:\n${details}`);
     }
@@ -22,17 +22,17 @@ export function expectConflict(
     type: string,
     severity?: 'error' | 'warning',
 ): Conflict {
-    const matching = result.conflicts.filter(c => {
+    const matching = result.conflicts.filter((c) => {
         if (c.type !== type) return false;
         if (severity && c.severity !== severity) return false;
         return true;
     });
 
     if (matching.length === 0) {
-        const available = result.conflicts.map(c => `${c.type} (${c.severity})`).join(', ');
+        const available = result.conflicts.map((c) => `${c.type} (${c.severity})`).join(', ');
         throw new Error(
             `Expected conflict of type "${type}"${severity ? ` with severity "${severity}"` : ''}, ` +
-            `but none found. Available conflicts: ${available || 'none'}`,
+                `but none found. Available conflicts: ${available || 'none'}`,
         );
     }
 
@@ -56,7 +56,7 @@ export function expectConflictInvolves(conflict: Conflict, ...eventIds: string[]
         if (!conflict.involvedEventIds.includes(id)) {
             throw new Error(
                 `Expected conflict to involve event ${id}, ` +
-                `but it involves: ${conflict.involvedEventIds.join(', ')}`,
+                    `but it involves: ${conflict.involvedEventIds.join(', ')}`,
             );
         }
     }

@@ -1,7 +1,4 @@
-import type {
-    TimetableEvent, EventException, Availability,
-    ConflictCheckResult,
-} from './types.js';
+import type { Availability, ConflictCheckResult, EventException, TimetableEvent } from './types.js';
 
 // ─── Event Names (constants for type safety) ────────────────
 export const DOMAIN_EVENTS = {

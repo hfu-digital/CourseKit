@@ -1,3 +1,4 @@
+import { VersionConflictError } from '../errors/index.js';
 import { AvailabilityStorage } from '../interfaces/availability-storage.interface.js';
 import type { Availability, AvailabilityEntityType, DateRange } from '../interfaces/types.js';
 
@@ -6,6 +7,7 @@ type PrismaAvailabilityDelegate = {
     findUnique: (args: { where: any }) => Promise<any>;
     findMany: (args: { where?: any; orderBy?: any }) => Promise<any[]>;
     update: (args: { where: any; data: any }) => Promise<any>;
+    updateMany: (args: { where: any; data: any }) => Promise<{ count: number }>;
     delete: (args: { where: any }) => Promise<any>;
 };
 
@@ -22,13 +24,20 @@ export class PrismaAvailabilityAdapter extends AvailabilityStorage {
         return this.delegate.findUnique({ where: { id } });
     }
 
-    async findByEntity(entityType: AvailabilityEntityType, entityId: string): Promise<Availability[]> {
+    async findByEntity(
+        entityType: AvailabilityEntityType,
+        entityId: string,
+    ): Promise<Availability[]> {
         return this.delegate.findMany({
             where: { entityType, entityId },
         });
     }
 
-    async findByEntityInRange(entityType: AvailabilityEntityType, entityId: string, dateRange: DateRange): Promise<Availability[]> {
+    async findByEntityInRange(
+        entityType: AvailabilityEntityType,
+        entityId: string,
+        dateRange: DateRange,
+    ): Promise<Availability[]> {
         return this.delegate.findMany({
             where: {
                 entityType,
@@ -50,8 +59,24 @@ export class PrismaAvailabilityAdapter extends AvailabilityStorage {
         });
     }
 
-    async update(id: string, data: Partial<Availability>): Promise<Availability> {
-        return this.delegate.update({ where: { id }, data });
+    async update(
+        id: string,
+        data: Partial<Availability>,
+        expectedVersion?: number,
+    ): Promise<Availability> {
+        if (expectedVersion === undefined) {
+            return this.delegate.update({ where: { id }, data });
+        }
+        const result = await this.delegate.updateMany({
+            where: { id, version: expectedVersion },
+            data: { ...data, version: expectedVersion + 1 },
+        });
+        if (result.count === 0) {
+            const current = await this.delegate.findUnique({ where: { id } });
+            const actual = current?.version ?? -1;
+            throw new VersionConflictError('Availability', id, expectedVersion, actual);
+        }
+        return this.delegate.findUnique({ where: { id } });
     }
 
     async delete(id: string): Promise<void> {

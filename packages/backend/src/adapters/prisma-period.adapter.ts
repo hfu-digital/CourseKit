@@ -22,7 +22,10 @@ export class PrismaAcademicPeriodAdapter extends AcademicPeriodStorage {
         return this.delegate.findUnique({ where: { id } });
     }
 
-    async findAll(filters?: { type?: AcademicPeriod['type']; parentId?: string }): Promise<AcademicPeriod[]> {
+    async findAll(filters?: {
+        type?: AcademicPeriod['type'];
+        parentId?: string;
+    }): Promise<AcademicPeriod[]> {
         const where: any = {};
         if (filters?.type) {
             where.type = filters.type;

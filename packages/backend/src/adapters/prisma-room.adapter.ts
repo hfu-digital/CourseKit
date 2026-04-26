@@ -22,7 +22,12 @@ export class PrismaRoomAdapter extends RoomStorage {
         return this.delegate.findUnique({ where: { id } });
     }
 
-    async findAll(filters?: { building?: string; campus?: string; minCapacity?: number; tags?: Record<string, unknown> }): Promise<Room[]> {
+    async findAll(filters?: {
+        building?: string;
+        campus?: string;
+        minCapacity?: number;
+        tags?: Record<string, unknown>;
+    }): Promise<Room[]> {
         const where: any = {};
 
         if (filters?.building) {

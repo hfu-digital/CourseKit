@@ -1,3 +1,4 @@
+import { VersionConflictError } from '../errors/index.js';
 import { LocationDistanceStorage } from '../interfaces/location-distance-storage.interface.js';
 import type { LocationDistance } from '../interfaces/types.js';
 
@@ -7,6 +8,7 @@ type PrismaLocationDistanceDelegate = {
     findFirst: (args: { where: any }) => Promise<any>;
     findMany: (args: { where?: any; orderBy?: any }) => Promise<any[]>;
     update: (args: { where: any; data: any }) => Promise<any>;
+    updateMany: (args: { where: any; data: any }) => Promise<{ count: number }>;
     delete: (args: { where: any }) => Promise<any>;
 };
 
@@ -29,8 +31,24 @@ export class PrismaLocationDistanceAdapter extends LocationDistanceStorage {
         return this.delegate.findMany({});
     }
 
-    async update(id: string, data: Partial<LocationDistance>): Promise<LocationDistance> {
-        return this.delegate.update({ where: { id }, data });
+    async update(
+        id: string,
+        data: Partial<LocationDistance>,
+        expectedVersion?: number,
+    ): Promise<LocationDistance> {
+        if (expectedVersion === undefined) {
+            return this.delegate.update({ where: { id }, data });
+        }
+        const result = await this.delegate.updateMany({
+            where: { id, version: expectedVersion },
+            data: { ...data, version: expectedVersion + 1 },
+        });
+        if (result.count === 0) {
+            const current = await this.delegate.findUnique({ where: { id } });
+            const actual = current?.version ?? -1;
+            throw new VersionConflictError('LocationDistance', id, expectedVersion, actual);
+        }
+        return this.delegate.findUnique({ where: { id } });
     }
 
     async delete(id: string): Promise<void> {

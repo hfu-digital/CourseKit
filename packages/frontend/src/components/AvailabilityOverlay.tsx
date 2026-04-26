@@ -39,14 +39,18 @@ export function AvailabilityOverlay({
     return (
         <div
             className={className}
-            style={className ? undefined : {
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                pointerEvents: 'none',
-            }}
+            style={
+                className
+                    ? undefined
+                    : {
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          pointerEvents: 'none',
+                      }
+            }
         >
             {blocks.map((block, idx) => {
                 const start = new Date(block.startTime);

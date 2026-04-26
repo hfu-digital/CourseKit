@@ -1,7 +1,7 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { RecurrenceService } from '../domain/recurrence.service.js';
-import { createTestEvent, createTestException } from '../testing/factories.js';
 import type { DateRange } from '../interfaces/types.js';
+import { createTestEvent, createTestException } from '../testing/factories.js';
 
 describe('RecurrenceService', () => {
     const service = new RecurrenceService();
@@ -84,7 +84,7 @@ describe('RecurrenceService', () => {
             const result = service.materialize(event, [], range);
             // Mondays in March 2026: 2, 9, 16, 23, 30
             expect(result.length).toBeGreaterThanOrEqual(4);
-            result.forEach(occ => {
+            result.forEach((occ) => {
                 expect(occ.startTime.getDay()).toBe(1); // Monday
             });
         });
@@ -111,7 +111,7 @@ describe('RecurrenceService', () => {
             const result = service.materialize(event, [exception], range);
             // March 9 should be excluded
             const hasMarch9 = result.some(
-                occ => occ.occurrenceDate.getTime() === cancelDate.getTime(),
+                (occ) => occ.occurrenceDate.getTime() === cancelDate.getTime(),
             );
             expect(hasMarch9).toBe(false);
         });
@@ -140,7 +140,7 @@ describe('RecurrenceService', () => {
 
             const result = service.materialize(event, [exception], range);
             const modified = result.find(
-                occ => occ.occurrenceDate.getTime() === modifyDate.getTime(),
+                (occ) => occ.occurrenceDate.getTime() === modifyDate.getTime(),
             );
             expect(modified).toBeDefined();
             expect(modified!.isException).toBe(true);
@@ -171,9 +171,7 @@ describe('RecurrenceService', () => {
             };
 
             const result = service.materialize(event, [exception], range);
-            const added = result.find(
-                occ => occ.exceptionType === 'added',
-            );
+            const added = result.find((occ) => occ.exceptionType === 'added');
             expect(added).toBeDefined();
             expect(added!.durationMin).toBe(60);
         });

@@ -1,6 +1,6 @@
 {
     "name": "@hfu.digital/coursekit-react",
-    "version": "0.0.4",
+    "version": "2026.04.1",
     "description": "React hooks and components for academic timetable UI — schedule grids, conflict badges, and availability overlays",
     "license": "MIT",
     "author": "hfu-digital",
@@ -13,12 +13,22 @@
     "bugs": {
         "url": "https://github.com/hfu-digital/CourseKit/issues"
     },
-    "keywords": ["timetable", "scheduling", "react", "academic", "hooks", "components", "coursekit"],
+    "keywords": [
+        "timetable",
+        "scheduling",
+        "react",
+        "academic",
+        "hooks",
+        "components",
+        "coursekit"
+    ],
     "type": "module",
     "main": "dist/index.js",
     "module": "dist/index.es.js",
     "types": "dist/index.d.ts",
-    "files": ["dist"],
+    "files": [
+        "dist"
+    ],
     "publishConfig": {
         "access": "public",
         "registry": "https://registry.npmjs.org/"
