@@ -24,21 +24,26 @@ bun run dev              # Watch mode for all three packages
 ### Package-level commands
 
 ```bash
-# Backend — uses bun:test, Bun bundler for JS, tsc for declarations
+# Backend — uses bun:test; builds with tsc (--outDir dist)
 cd packages/backend
-bun test                              # Run all tests
-bun test src/__tests__/conflict.service.test.ts  # Single test file
-bun run build                         # Build JS + type declarations
+bun test                                          # Run all tests
+bun test src/__tests__/conflict.service.test.ts   # Single test file
+bun run build                                      # Compile to dist/ (tsc)
 
-# Frontend — uses Vite + vite-plugin-dts
+# Starplan — uses bun:test; builds with tsc
+cd packages/starplan
+bun test                                          # Run all tests
+bun test src/__tests__/parser.test.ts             # Single test file
+
+# Frontend — uses Vite + vite-plugin-dts (no tests)
 cd packages/frontend
-bun run build                         # Vite library build (ES + CJS)
-bun run typecheck                     # Type-check only
+bun run build                                      # Vite library build (main + ES module)
+bun run typecheck                                  # Type-check only
 ```
 
 ## Monorepo Structure
 
-Turborepo workspace with `packages/*` and `examples/*` workspaces — three packages: `backend/`, `frontend/`, `starplan/`. Build tasks have `dependsOn: ["^build"]`, so internal cross-package deps are built in topological order. All packages use `tsconfig.base.json` at root (ESNext target, strict mode, `verbatimModuleSyntax`).
+Turborepo workspace with `packages/*` and `examples/*` workspaces — three packages: `backend/`, `frontend/`, `starplan/` (plus `examples/nestjs-basic`). Build tasks have `dependsOn: ["^build"]`, so internal cross-package deps are built in topological order. Backend and starplan build with `tsc`; frontend builds with Vite. All packages target strict-mode TypeScript with `verbatimModuleSyntax`.
 
 ## Architecture
 
@@ -86,18 +91,18 @@ Recurring events are never queried as-is. `RecurrenceService.materialize()` expa
 
 ### Frontend Package
 
-React context provider (`CourseKitProvider`) accepts `apiUrl` and optional custom `fetch`. Hooks (`useTimetable`, `useAvailability`, `useConflictCheck`, `useMutation`, `useRoomSearch`) call the backend API. Components (`TimetableGrid`, `EventCard`, `ConflictBadge`, `AvailabilityOverlay`) are unstyled/minimal.
+React context provider (`CourseKitProvider`) accepts `apiUrl` and optional custom `fetch`. Hooks (`useTimetable`, `useAvailability`, `useConflictCheck`, `useMutation`, `useRoomSearch`, `useSemester`, `useChanges`, `useCourseSubscriptions`) call the backend API. Components (`TimetableGrid`, `StudyBlockGrid`, `EventCard`, `ConflictBadge`, `AvailabilityOverlay`) are unstyled/minimal. HFU study-block helpers live in `src/utils/hfu-blocks.ts`.
 
 ## Testing
 
-Backend tests use `bun:test` with in-memory storage adapters — no database required. Test utilities are exported from `@hfu.digital/coursekit-nestjs/testing`:
-- **Factories**: `createTestEvent()`, `createTestRoom()`, `createTestInstructor()`, etc.
-- **Fixtures**: `simpleSchoolWeek`, `universitySemester`, `edgeCaseSchedule`
-- **Helpers**: `EventSpy` for domain event assertions, `expectNoConflicts()`, `expectConflict()`
+Backend and starplan tests use `bun:test` (frontend has no tests). Backend tests use in-memory storage adapters — no database required. Test utilities are exported from `@hfu.digital/coursekit-nestjs/testing` (`src/testing/`):
+- **Factories**: `createTestEvent()`, `createTestRoom()`, `createTestInstructor()`, etc. (`factories.ts`)
+- **Fixtures**: `simpleSchoolWeek`, `universitySemester`, `edgeCaseSchedule` (`fixtures.ts`)
+- **Helpers**: `EventSpy` for domain event assertions (`event-spy.ts`), `expectNoConflicts()`, `expectConflict()` (`assertions.ts`)
 
 ## Publishing
 
-CI publishes on `v*` tags via GitHub Actions. All three packages are published to npm with `bun publish --access public`. The workflow runs `bun install --frozen-lockfile`, then `turbo build` and `turbo test` before publishing.
+CI publishes on `v*` tags via GitHub Actions (`.github/workflows/publish.yml`). The workflow runs `bun install --frozen-lockfile`, then `turbo build` and `turbo test`, after which each of the three packages is published with `npm publish --access public --provenance`.
 
 ## Versioning
 
