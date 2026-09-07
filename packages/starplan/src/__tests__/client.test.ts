@@ -34,6 +34,42 @@ describe('StarPlanClient', () => {
         ]);
     });
 
+    it('preserves source lecture metadata with stable normalized fields', async () => {
+        const client = new StarPlanClient({
+            baseUrl: 'https://splan.example.test/starplan',
+            planningUnit: '5',
+            fetchImpl: async () =>
+                jsonResponse([
+                    [
+                        {
+                            id: 1742,
+                            name: 'AIN1',
+                            shortname: '1',
+                            lectures: [
+                                { id: 9001, name: 'Datenbanken', shortname: 'DB' },
+                                { id: '9002', name: 'Programmierung', code: 'PRG' },
+                                { name: 'Ohne Code' },
+                            ],
+                        },
+                    ],
+                ]),
+        });
+
+        await expect(client.fetchSemesters('41')).resolves.toEqual([
+            {
+                id: '1742',
+                programId: '41',
+                name: 'AIN1',
+                shortName: '1',
+                lectures: [
+                    { id: '9001', name: 'Datenbanken', code: 'DB' },
+                    { id: '9002', name: 'Programmierung', code: 'PRG' },
+                    { name: 'Ohne Code' },
+                ],
+            },
+        ]);
+    });
+
     it('builds the canonical semester iCal URL and decodes ISO-8859-1 data', async () => {
         const latin1 = Uint8Array.from([
             66,

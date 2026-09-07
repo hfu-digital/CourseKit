@@ -11,6 +11,7 @@ export {
 export {
     StarPlanClient,
     type StarPlanClientOptions,
+    type StarPlanLecture,
     type StarPlanProgram,
     type StarPlanSemester,
 } from './client/starplan-client.js';

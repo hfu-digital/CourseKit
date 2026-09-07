@@ -14,11 +14,21 @@ export interface StarPlanProgram {
     shortName?: string;
 }
 
+/** Stable representation of a lecture returned by StarPlan's semester endpoint. */
+export interface StarPlanLecture {
+    id?: string;
+    name?: string;
+    /** StarPlan calls this field `shortname` in its current JSON response. */
+    code?: string;
+}
+
 export interface StarPlanSemester {
     id: string;
     programId: string;
     name: string;
     shortName?: string;
+    /** Source lectures, when the StarPlan instance includes them in the response. */
+    lectures?: StarPlanLecture[];
 }
 
 export interface StarPlanClientOptions {
@@ -52,6 +62,14 @@ interface StarPlanRawSemester {
     pgid?: string | number;
     name?: string;
     shortname?: string;
+    lectures?: StarPlanRawLecture[];
+}
+
+interface StarPlanRawLecture {
+    id?: string | number;
+    name?: string;
+    code?: string | number;
+    shortname?: string | number;
 }
 
 export class StarPlanClient {
@@ -103,12 +121,25 @@ export class StarPlanClient {
             return [];
         }
 
-        return (data[0] as StarPlanRawSemester[]).map((item) => ({
-            id: String(item.id ?? item.pgid ?? ''),
-            programId,
-            name: String(item.name ?? ''),
-            shortName: item.shortname ? String(item.shortname) : undefined,
-        }));
+        return (data[0] as StarPlanRawSemester[]).map((item) => {
+            const lectures = Array.isArray(item.lectures)
+                ? item.lectures.map((lecture) => ({
+                      ...(lecture.id != null ? { id: String(lecture.id) } : {}),
+                      ...(lecture.name != null ? { name: String(lecture.name) } : {}),
+                      ...(lecture.code != null || lecture.shortname != null
+                          ? { code: String(lecture.code ?? lecture.shortname) }
+                          : {}),
+                  }))
+                : undefined;
+
+            return {
+                id: String(item.id ?? item.pgid ?? ''),
+                programId,
+                name: String(item.name ?? ''),
+                shortName: item.shortname ? String(item.shortname) : undefined,
+                ...(lectures !== undefined ? { lectures } : {}),
+            };
+        });
     }
 
     async fetchIcal(semesterId: string): Promise<string> {
