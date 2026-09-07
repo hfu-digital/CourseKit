@@ -14,6 +14,9 @@ A timetable engine for academic scheduling: recurring events, conflict detection
 # Backend
 bun add @hfu.digital/coursekit-nestjs
 
+# StarPlan client/parser (framework-agnostic)
+bun add @hfu.digital/coursekit-starplan
+
 # Frontend
 bun add @hfu.digital/coursekit-react
 ```
