@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { parseIcal } from '../parser/ical.js';
+import { extractInstructor } from '../extract/instructor.js';
 
 const baseEvent = (extras: string = '') => `BEGIN:VEVENT
 UID:lecture-001@hs-furtwangen.de
@@ -81,5 +82,19 @@ END:VCALENDAR`;
         const event = parseIcal(ical)[0];
         expect(event.summary).toBe('Course, Part 1');
         expect(event.description).toBe('Line 1\nLine 2');
+    });
+});
+
+describe('extractInstructor', () => {
+    it('recognizes the unlabeled instructor line used by HFU exports', () => {
+        expect(
+            extractInstructor('Betriebliches Gesundheitsmanagement\nKirsten Steinhausen\nAGF1\n'),
+        ).toBe('Kirsten Steinhausen');
+    });
+
+    it('keeps multiple instructors on one source line', () => {
+        expect(
+            extractInstructor('Research Projekt Themen Vorstellung\nMax Federer, Erika Muster\nAIN1'),
+        ).toBe('Max Federer, Erika Muster');
     });
 });

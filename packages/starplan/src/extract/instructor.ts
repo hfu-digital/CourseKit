@@ -14,6 +14,8 @@ export interface InstructorExtractorConfig {
 
 const DEFAULT_PATTERNS: RegExp[] = [
     /Dozent(?:in)?:\s*(.+?)(?:\n|$)/i,
+    /Lehrperson(?:en)?:\s*(.+?)(?:\n|$)/i,
+    /Lehrkraft(?::\s*)?(.+?)(?:\n|$)/i,
     /Instructor:\s*(.+?)(?:\n|$)/i,
     /Lehrer(?:in)?:\s*(.+?)(?:\n|$)/i,
     /Prof\.?\s*(?:Dr\.?\s*)?(.+?)(?:\n|$)/i,
@@ -36,6 +38,22 @@ export function extractInstructor(
                 return name;
             }
         }
+    }
+
+    // HFU's current StarPlan export commonly places instructor names on the
+    // second description line without a label, followed by the semester
+    // bucket (for example: `Course title\nMax Mustermann, Erika Muster\nAIN1`).
+    // Inspect lines after the title and ignore compact/all-caps bucket names.
+    const lines = description
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    const nameLine = lines.slice(1).find((line) => {
+        if (/^[A-ZÄÖÜ][A-ZÄÖÜ0-9 ._-]{1,20}$/.test(line)) return false;
+        return /[A-ZÄÖÜ][a-zäöüß-]+\s+[A-ZÄÖÜ][a-zäöüß-]+/.test(line);
+    });
+    if (nameLine && nameLine.length >= minLen && nameLine.length <= maxLen && !nameLine.includes('@')) {
+        return nameLine;
     }
     return null;
 }
