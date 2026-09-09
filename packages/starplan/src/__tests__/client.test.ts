@@ -145,4 +145,38 @@ describe('StarPlanClient', () => {
 
         await expect(client.fetchIcal('1742')).rejects.toThrow('HTTP 503: Unavailable');
     });
+
+    it('rejects HTML error pages instead of passing them to an iCal parser', async () => {
+        let attempts = 0;
+        const client = new StarPlanClient({
+            baseUrl: 'https://splan.example.test/starplan',
+            planningUnit: '5',
+            fetchImpl: async () => {
+                attempts++;
+                return new Response('<!DOCTYPE html><html><body>temporarily unavailable</body></html>', {
+                    headers: { 'content-type': 'text/html; charset=utf-8' },
+                });
+            },
+        });
+
+        await expect(client.fetchIcal('1742')).rejects.toThrow(
+            'StarPlan iCal response was not a calendar',
+        );
+        expect(attempts).toBe(3);
+    });
+
+    it('rejects HTML responses for JSON endpoints with a useful error', async () => {
+        const client = new StarPlanClient({
+            baseUrl: 'https://splan.example.test/starplan',
+            planningUnit: '5',
+            fetchImpl: async () =>
+                new Response('<!DOCTYPE html><html><body>proxy error</body></html>', {
+                    headers: { 'content-type': 'text/html; charset=utf-8' },
+                }),
+        });
+
+        await expect(client.fetchPrograms()).rejects.toThrow(
+            'StarPlan program list response was not valid JSON',
+        );
+    });
 });
