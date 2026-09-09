@@ -50,6 +50,9 @@ export interface StarPlanClientOptions {
     fallbackCharset?: string;
 }
 
+const MAX_FETCH_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 250;
+
 interface StarPlanRawProgram {
     id?: string | number;
     oid?: string | number;
@@ -94,13 +97,13 @@ export class StarPlanClient {
         const url = `${this.baseUrl}/json?m=getogs`;
         this.logger.debug?.(`StarPlan: fetching programs from ${url}`);
 
-        const text = await fetchWithCharset(url, this.fetchOptions);
-        const data = JSON.parse(text);
-
-        if (!Array.isArray(data) || !Array.isArray(data[0])) {
-            this.logger.warn?.('StarPlan: unexpected programs response shape');
-            return [];
-        }
+        const text = await this.fetchValidated(url, 'program list', (body) => {
+            const data = parseJson(body, 'program list', url);
+            if (!Array.isArray(data) || !Array.isArray(data[0])) {
+                throw new Error(`StarPlan program list response had an unexpected shape (${url})`);
+            }
+        });
+        const data = parseJson(text, 'program list', url) as unknown[][];
 
         return (data[0] as StarPlanRawProgram[]).map((item) => ({
             id: String(item.id ?? item.oid ?? ''),
@@ -113,13 +116,15 @@ export class StarPlanClient {
         const url = `${this.baseUrl}/json?m=getPgsExt&pu=${encodeURIComponent(this.planningUnit)}&og=${encodeURIComponent(programId)}`;
         this.logger.debug?.(`StarPlan: fetching semesters for program ${programId}`);
 
-        const text = await fetchWithCharset(url, this.fetchOptions);
-        const data = JSON.parse(text);
-
-        if (!Array.isArray(data) || !Array.isArray(data[0])) {
-            this.logger.warn?.('StarPlan: unexpected semesters response shape');
-            return [];
-        }
+        const text = await this.fetchValidated(url, `semester list for ${programId}`, (body) => {
+            const data = parseJson(body, `semester list for ${programId}`, url);
+            if (!Array.isArray(data) || !Array.isArray(data[0])) {
+                throw new Error(
+                    `StarPlan semester list response had an unexpected shape (${url})`,
+                );
+            }
+        });
+        const data = parseJson(text, `semester list for ${programId}`, url) as unknown[][];
 
         return (data[0] as StarPlanRawSemester[]).map((item) => {
             const lectures = Array.isArray(item.lectures)
@@ -145,11 +150,61 @@ export class StarPlanClient {
     async fetchIcal(semesterId: string): Promise<string> {
         const url = this.getIcalUrl(semesterId);
         this.logger.debug?.(`StarPlan: fetching iCal for semester ${semesterId}`);
-        return fetchWithCharset(url, this.fetchOptions);
+        return this.fetchValidated(url, `iCal for semester ${semesterId}`, (body) => {
+            const normalized = body.replace(/^\uFEFF/, '').trimStart();
+            if (!normalized.startsWith('BEGIN:VCALENDAR')) {
+                throw new Error(
+                    `StarPlan iCal response was not a calendar (${url}); received ${preview(body)}`,
+                );
+            }
+            if (!normalized.includes('END:VCALENDAR')) {
+                throw new Error(`StarPlan iCal response was incomplete (${url})`);
+            }
+        });
     }
 
     /** Public, copy-pasteable iCal feed URL for a semester. */
     getIcalUrl(semesterId: string): string {
         return `${this.baseUrl}/ical?lan=${this.locale}&puid=${encodeURIComponent(this.planningUnit)}&type=pg&pgid=${encodeURIComponent(semesterId)}`;
     }
+
+    private async fetchValidated(
+        url: string,
+        description: string,
+        validate: (body: string) => void,
+    ): Promise<string> {
+        let lastError: unknown;
+
+        for (let attempt = 1; attempt <= MAX_FETCH_ATTEMPTS; attempt++) {
+            try {
+                const body = await fetchWithCharset(url, this.fetchOptions);
+                validate(body);
+                return body;
+            } catch (error) {
+                lastError = error;
+                if (attempt === MAX_FETCH_ATTEMPTS) break;
+                this.logger.warn?.(
+                    `StarPlan: ${description} failed (attempt ${attempt}/${MAX_FETCH_ATTEMPTS}); retrying`,
+                );
+                await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+            }
+        }
+
+        throw lastError instanceof Error ? lastError : new Error(String(lastError));
+    }
+}
+
+function parseJson(body: string, description: string, url: string): unknown {
+    try {
+        return JSON.parse(body);
+    } catch {
+        throw new Error(
+            `StarPlan ${description} response was not valid JSON (${url}); received ${preview(body)}`,
+        );
+    }
+}
+
+function preview(body: string): string {
+    const value = body.trim().replace(/\s+/g, ' ').slice(0, 120);
+    return value ? `body starting with ${JSON.stringify(value)}` : 'an empty body';
 }
