@@ -50,8 +50,8 @@ export interface StarPlanClientOptions {
     fallbackCharset?: string;
 }
 
-const MAX_FETCH_ATTEMPTS = 3;
-const RETRY_DELAY_MS = 250;
+const MAX_FETCH_ATTEMPTS = 5;
+const RETRY_DELAY_MS = 200;
 
 interface StarPlanRawProgram {
     id?: string | number;
@@ -186,7 +186,8 @@ export class StarPlanClient {
                 this.logger.warn?.(
                     `StarPlan: ${description} failed (attempt ${attempt}/${MAX_FETCH_ATTEMPTS}); retrying`,
                 );
-                await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+                const delay = RETRY_DELAY_MS * 2 ** (attempt - 1);
+                await new Promise((resolve) => setTimeout(resolve, delay));
             }
         }
 

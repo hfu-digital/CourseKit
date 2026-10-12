@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { StarPlanClient } from '../client/starplan-client.js';
+import { parseIcal } from '../parser/ical.js';
 
 const jsonResponse = (value: unknown) =>
     new Response(JSON.stringify(value), {
@@ -162,7 +163,44 @@ describe('StarPlanClient', () => {
         await expect(client.fetchIcal('1742')).rejects.toThrow(
             'StarPlan iCal response was not a calendar',
         );
-        expect(attempts).toBe(3);
+        expect(attempts).toBe(5);
+    });
+
+    it('recovers when a transient HTML error clears and returns the calendar', async () => {
+        let attempts = 0;
+        const calendar = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'BEGIN:VEVENT',
+            'UID:recovered-lecture',
+            'SUMMARY:Recovered lecture',
+            'DTSTART:20260427T080000',
+            'DTEND:20260427T093000',
+            'END:VEVENT',
+            'END:VCALENDAR',
+        ].join('\r\n');
+        const client = new StarPlanClient({
+            baseUrl: 'https://splan.example.test/starplan',
+            planningUnit: '5',
+            fetchImpl: async () => {
+                attempts++;
+                if (attempts < 4) {
+                    return new Response(
+                        '<!DOCTYPE html><html><body>temporarily unavailable</body></html>',
+                        { headers: { 'content-type': 'text/html; charset=utf-8' } },
+                    );
+                }
+                return new Response(calendar, {
+                    headers: { 'content-type': 'text/calendar; charset=utf-8' },
+                });
+            },
+        });
+
+        const recoveredFeed = await client.fetchIcal('1742');
+        expect(parseIcal(recoveredFeed).map((event) => event.summary)).toEqual([
+            'Recovered lecture',
+        ]);
+        expect(attempts).toBe(4);
     });
 
     it('rejects HTML responses for JSON endpoints with a useful error', async () => {
