@@ -1,10 +1,15 @@
+import { readBatch, byKey } from './batch.js';
 import { Injectable } from '@nestjs/common';
 import { TimetableEventStorage } from '../interfaces/event-storage.interface.js';
+import type {
+    DateRange,
+    FreeSlot,
+    FreeSlotQuery,
+    MaterializedOccurrence,
+    ScheduleQuery,
+} from '../interfaces/types.js';
 import { RecurrenceService } from './recurrence.service.js';
 import { TimeService } from './time.service.js';
-import type {
-    ScheduleQuery, MaterializedOccurrence, FreeSlotQuery, FreeSlot, DateRange,
-} from '../interfaces/types.js';
 
 @Injectable()
 export class QueryService {
@@ -22,8 +27,9 @@ export class QueryService {
         const events = await this.eventStorage.findByQuery(query);
         const allOccurrences: MaterializedOccurrence[] = [];
 
+        const exceptionMap = byKey(await readBatch(events.map(e => e.id), this.eventStorage.findExceptionsBatch?.bind(this.eventStorage), id => this.eventStorage.findExceptions(id)), e => e.eventId);
         for (const event of events) {
-            const exceptions = await this.eventStorage.findExceptions(event.id);
+            const exceptions = exceptionMap.get(event.id) ?? [];
             const occurrences = this.recurrence.materialize(event, exceptions, query.dateRange);
             allOccurrences.push(...occurrences);
         }
@@ -41,6 +47,8 @@ export class QueryService {
         // Collect all occupied intervals for the specified entities
         const occupiedIntervals: Array<{ start: Date; end: Date }> = [];
 
+        // Each event contributes the same occupied intervals for every entity.
+        const uniqueEvents = new Map<string, import("../interfaces/types.js").TimetableEvent>();
         for (const entity of query.entityIds) {
             const entityQuery: ScheduleQuery = {
                 dateRange: query.dateRange,
@@ -51,14 +59,13 @@ export class QueryService {
 
             const events = await this.eventStorage.findByQuery(entityQuery);
             for (const event of events) {
-                const exceptions = await this.eventStorage.findExceptions(event.id);
-                const occurrences = this.recurrence.materialize(event, exceptions, query.dateRange);
-                for (const occ of occurrences) {
-                    occupiedIntervals.push({
-                        start: occ.startTime,
-                        end: this.time.endTime(occ.startTime, occ.durationMin),
-                    });
-                }
+                if (!uniqueEvents.has(event.id)) uniqueEvents.set(event.id, event);
+            }
+        }
+        const exceptions = byKey(await readBatch([...uniqueEvents.keys()], this.eventStorage.findExceptionsBatch?.bind(this.eventStorage), id => this.eventStorage.findExceptions(id)), e => e.eventId);
+        for (const event of uniqueEvents.values()) {
+            for (const occ of this.recurrence.materialize(event, exceptions.get(event.id) ?? [], query.dateRange)) {
+                occupiedIntervals.push({ start: occ.startTime, end: this.time.endTime(occ.startTime, occ.durationMin) });
             }
         }
 
@@ -119,7 +126,9 @@ export class QueryService {
         return this.getSchedule(query);
     }
 
-    private mergeIntervals(intervals: Array<{ start: Date; end: Date }>): Array<{ start: Date; end: Date }> {
+    private mergeIntervals(
+        intervals: Array<{ start: Date; end: Date }>,
+    ): Array<{ start: Date; end: Date }> {
         if (intervals.length === 0) return [];
 
         const result: Array<{ start: Date; end: Date }> = [{ ...intervals[0] }];

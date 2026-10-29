@@ -38,17 +38,17 @@ export class EventSpy {
 
     /** Get events by name */
     getByName(name: string): CapturedEvent[] {
-        return this.captured.filter(e => e.name === name);
+        return this.captured.filter((e) => e.name === name);
     }
 
     /** Check if an event was emitted */
     wasEmitted(name: string): boolean {
-        return this.captured.some(e => e.name === name);
+        return this.captured.some((e) => e.name === name);
     }
 
     /** Get the count of events with a given name */
     countByName(name: string): number {
-        return this.captured.filter(e => e.name === name).length;
+        return this.captured.filter((e) => e.name === name).length;
     }
 
     /** Get the last emitted event */

@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { ScheduleConstraint } from '../interfaces/constraint.interface.js';
 import type { ConstraintContext } from '../interfaces/constraint.interface.js';
-import type { MaterializedOccurrence, Conflict, AvailabilityEntityType } from '../interfaces/types.js';
+import { ScheduleConstraint } from '../interfaces/constraint.interface.js';
+import type {
+    AvailabilityEntityType,
+    Conflict,
+    MaterializedOccurrence,
+} from '../interfaces/types.js';
 
 @Injectable()
 export class AvailabilityConstraint extends ScheduleConstraint {

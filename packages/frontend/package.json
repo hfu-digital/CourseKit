@@ -1,45 +1,55 @@
 {
-    "name": "@hfu.digital/coursekit-react",
-    "version": "0.0.1",
-    "description": "React hooks and components for academic timetable UI — schedule grids, conflict badges, and availability overlays",
-    "license": "MIT",
-    "author": "hfu-digital",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/hfu-digital/CourseKit",
-        "directory": "packages/frontend"
-    },
-    "homepage": "https://github.com/hfu-digital/CourseKit#readme",
-    "bugs": {
-        "url": "https://github.com/hfu-digital/CourseKit/issues"
-    },
-    "keywords": ["timetable", "scheduling", "react", "academic", "hooks", "components", "coursekit"],
-    "type": "module",
-    "main": "dist/index.js",
-    "module": "dist/index.es.js",
-    "types": "dist/index.d.ts",
-    "files": ["dist"],
-    "publishConfig": {
-        "access": "public",
-        "registry": "https://registry.npmjs.org/"
-    },
-    "scripts": {
-        "build": "bunx vite build",
-        "dev": "bunx vite build --watch",
-        "typecheck": "tsc --noEmit",
-        "prepublishOnly": "bun run build"
-    },
-    "peerDependencies": {
-        "react": "^18.0.0 || ^19.0.0",
-        "react-dom": "^18.0.0 || ^19.0.0"
-    },
-    "devDependencies": {
-        "react": "^19.0.0",
-        "react-dom": "^19.0.0",
-        "@types/react": "^19.0.0",
-        "@vitejs/plugin-react": "^4.0.0",
-        "vite": "^6.0.0",
-        "vite-plugin-dts": "^4.0.0",
-        "typescript": "^5.7.0"
-    }
+  "name": "@hfu.digital/coursekit-react",
+  "version": "2026.04.1",
+  "description": "React hooks and components for academic timetable UI \u2014 schedule grids, conflict badges, and availability overlays",
+  "license": "MIT",
+  "author": "hfu-digital",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hfu-digital/CourseKit",
+    "directory": "packages/frontend"
+  },
+  "homepage": "https://github.com/hfu-digital/CourseKit#readme",
+  "bugs": {
+    "url": "https://github.com/hfu-digital/CourseKit/issues"
+  },
+  "keywords": [
+    "timetable",
+    "scheduling",
+    "react",
+    "academic",
+    "hooks",
+    "components",
+    "coursekit"
+  ],
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.es.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "bunx vite build",
+    "dev": "bunx vite build --watch",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run build"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@types/react": "^19.0.0",
+    "@vitejs/plugin-react": "^4.0.0",
+    "vite": "^6.4.5",
+    "vite-plugin-dts": "^4.5.4",
+    "typescript": "^5.7.0"
+  }
 }

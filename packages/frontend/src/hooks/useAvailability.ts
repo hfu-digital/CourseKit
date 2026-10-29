@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { LatestRequest } from './latest-request.js';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useCourseKitConfig } from '../context/CourseKitProvider.js';
 
 export interface AvailabilityQuery {
@@ -35,14 +36,17 @@ export function useAvailability(query: AvailabilityQuery | null): UseAvailabilit
     const { apiUrl, fetch: customFetch } = useCourseKitConfig();
     const fetchFn = customFetch ?? globalThis.fetch;
 
+    const requests = useRef(new LatestRequest());
+    useEffect(() => () => requests.current.cancel(), [apiUrl, fetchFn]);
     const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
     const [freeSlots, setFreeSlots] = useState<FreeSlot[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
     const fetchData = useCallback(async () => {
-        if (!query) return;
+        if (!query) { requests.current.cancel(); setLoading(false); return; }
 
+        const signal = requests.current.begin();
         setLoading(true);
         setError(null);
 
@@ -54,23 +58,26 @@ export function useAvailability(query: AvailabilityQuery | null): UseAvailabilit
                 endDate: query.dateRange.end,
             });
 
-            const response = await fetchFn(`${apiUrl}/availability?${params.toString()}`);
+            const response = await fetchFn(`${apiUrl}/availability?${params.toString()}`, { signal });
             if (!response.ok) {
                 throw new Error(`Failed to fetch availability: ${response.status}`);
             }
 
             const result = await response.json();
+            if (signal.aborted) return;
             setSlots(result.slots ?? []);
             setFreeSlots(result.freeSlots ?? []);
         } catch (err) {
+            if (signal.aborted) return;
             setError(err instanceof Error ? err : new Error(String(err)));
         } finally {
-            setLoading(false);
+            if (!signal.aborted) setLoading(false);
         }
     }, [apiUrl, fetchFn, query ? JSON.stringify(query) : null]);
 
     useEffect(() => {
         fetchData();
+        return () => requests.current.cancel();
     }, [fetchData]);
 
     return { slots, freeSlots, loading, error, refetch: fetchData };

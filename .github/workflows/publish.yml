@@ -6,46 +6,41 @@ on:
             - 'v*'
 
 permissions:
-    contents: write
-    id-token: write
+    contents: read
 
 jobs:
-    build:
+    validate-tag:
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
-
-            - uses: oven-sh/setup-bun@v2
-              with:
-                  bun-version: latest
-
-            - name: Install dependencies
-              run: bun install
-
-            - name: Build
-              run: bun run build
-
-            - name: Test
-              run: bun run test
+            - name: Validate CalVer tag (vYYYY.MM.N)
+              run: |
+                  TAG="${GITHUB_REF#refs/tags/}"
+                  if [[ ! "$TAG" =~ ^v[0-9]{4}\.(0[1-9]|1[0-2])\.[0-9]+$ ]]; then
+                      echo "::error::Tag '$TAG' does not match CalVer pattern vYYYY.MM.N (e.g. v2026.04.1)"
+                      exit 1
+                  fi
+                  echo "Tag '$TAG' is a valid CalVer tag."
 
     publish:
-        needs: build
+        permissions:
+            contents: read
+            id-token: write
+        needs: validate-tag
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-            - uses: oven-sh/setup-bun@v2
+            - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
               with:
-                  bun-version: latest
+                  bun-version: 1.4.2
 
-            - uses: actions/setup-node@v4
+            - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
               with:
-                  node-version: 22
+                  node-version: 22.23.2
                   registry-url: https://registry.npmjs.org
 
             - name: Install dependencies
-              run: bun install
-
+              run: bun install --frozen-lockfile --ignore-scripts
             - name: Build
               run: bun run build
 
@@ -61,24 +56,30 @@ jobs:
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+            - name: Publish @hfu.digital/coursekit-starplan
+              working-directory: packages/starplan
+              run: npm publish --access public --provenance
+              env:
+                  NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
     release:
         needs: publish
         runs-on: ubuntu-latest
         permissions:
             contents: write
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
               with:
                   fetch-depth: 0
-                  token: ${{ secrets.GH_PAT }}
+                  persist-credentials: false
 
             - name: Push to prod branch
               run: |
                   git config user.name "github-actions[bot]"
                   git config user.email "github-actions[bot]@users.noreply.github.com"
-                  git push origin HEAD:refs/heads/prod --force
+                  git push origin HEAD:refs/heads/prod
 
             - name: Create GitHub Release
-              uses: softprops/action-gh-release@v2
+              uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
               with:
                   generate_release_notes: true

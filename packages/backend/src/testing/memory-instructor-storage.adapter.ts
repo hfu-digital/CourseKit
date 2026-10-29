@@ -1,3 +1,4 @@
+import { EntityNotFoundError } from '../errors/index.js';
 import { InstructorStorage } from '../interfaces/instructor-storage.interface.js';
 import type { Instructor } from '../interfaces/types.js';
 
@@ -20,7 +21,7 @@ export class InMemoryInstructorStorage extends InstructorStorage {
 
     async update(id: string, data: Partial<Instructor>): Promise<Instructor> {
         const existing = this.instructors.get(id);
-        if (!existing) throw new Error(`Instructor ${id} not found`);
+        if (!existing) throw new EntityNotFoundError('Instructor', id);
         const updated: Instructor = { ...existing, ...data, id };
         this.instructors.set(id, updated);
         return updated;

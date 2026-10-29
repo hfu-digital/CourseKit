@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { QueryService } from '../domain/query.service.js';
 import { RecurrenceService } from '../domain/recurrence.service.js';
 import { TimeService } from '../domain/time.service.js';
-import { InMemoryTimetableEventStorage } from '../testing/memory-event-storage.adapter.js';
 import type { DateRange } from '../interfaces/types.js';
+import { InMemoryTimetableEventStorage } from '../testing/memory-event-storage.adapter.js';
 
 describe('QueryService', () => {
     function createService() {
@@ -119,15 +119,28 @@ describe('QueryService', () => {
             periodId: null,
         });
 
-        const result = await query.getEntitySchedule(
-            'room',
-            'room-1',
-            {
-                start: new Date('2026-03-01T00:00:00Z'),
-                end: new Date('2026-03-07T23:59:59Z'),
-            },
-        );
+        const result = await query.getEntitySchedule('room', 'room-1', {
+            start: new Date('2026-03-01T00:00:00Z'),
+            end: new Date('2026-03-07T23:59:59Z'),
+        });
 
         expect(result).toHaveLength(1);
     });
+});
+
+it('expands shared events once per free-slot query without retaining results between calls', async () => {
+    const storage = new InMemoryTimetableEventStorage();
+    const event = await storage.create({ title: 'Shared', startTime: new Date('2026-03-02T09:00:00Z'), durationMin: 60, recurrenceRule: null, metadata: null, courseId: null, roomId: 'room', periodId: null });
+    await storage.addInstructor({ eventId: event.id, instructorId: 'teacher' });
+    Object.defineProperty(storage, "findExceptionsBatch", { value: undefined });
+    let reads = 0;
+    const original = storage.findExceptions.bind(storage);
+    storage.findExceptions = async id => { reads++; return original(id); };
+    const service = new QueryService(storage, new RecurrenceService(), new TimeService());
+    const query = { entityIds: [{ type: 'room' as const, id: 'room' }, { type: 'instructor' as const, id: 'teacher' }], dateRange: { start: new Date('2026-03-02T08:00:00Z'), end: new Date('2026-03-02T11:00:00Z') }, durationMin: 30 };
+    const result = await service.findFreeSlots(query);
+    expect(reads).toBe(1);
+    expect(result.map(slot => slot.durationMin)).toEqual([60, 60]);
+    await service.findFreeSlots(query);
+    expect(reads).toBe(2);
 });

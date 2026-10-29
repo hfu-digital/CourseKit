@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { LatestRequest } from './latest-request.js';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useCourseKitConfig } from '../context/CourseKitProvider.js';
 
 export interface RoomSearchQuery {
@@ -28,43 +29,53 @@ export function useRoomSearch(initialQuery?: RoomSearchQuery): UseRoomSearchResu
     const { apiUrl, fetch: customFetch } = useCourseKitConfig();
     const fetchFn = customFetch ?? globalThis.fetch;
 
+    const requests = useRef(new LatestRequest());
+    useEffect(() => () => requests.current.cancel(), [apiUrl, fetchFn]);
     const [rooms, setRooms] = useState<RoomResult[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
-    const search = useCallback(async (query: RoomSearchQuery) => {
-        setLoading(true);
-        setError(null);
+    const search = useCallback(
+        async (query: RoomSearchQuery) => {
+            const signal = requests.current.begin();
+            setLoading(true);
+            setError(null);
 
-        try {
-            const params = new URLSearchParams();
-            if (query.building) params.set('building', query.building);
-            if (query.campus) params.set('campus', query.campus);
-            if (query.minCapacity !== undefined) params.set('minCapacity', String(query.minCapacity));
-            if (query.availableAt) {
-                params.set('availableStart', query.availableAt.start);
-                params.set('availableEnd', query.availableAt.end);
+            try {
+                const params = new URLSearchParams();
+                if (query.building) params.set('building', query.building);
+                if (query.campus) params.set('campus', query.campus);
+                if (query.minCapacity !== undefined)
+                    params.set('minCapacity', String(query.minCapacity));
+                if (query.availableAt) {
+                    params.set('availableStart', query.availableAt.start);
+                    params.set('availableEnd', query.availableAt.end);
+                }
+
+                const response = await fetchFn(`${apiUrl}/rooms?${params.toString()}`, { signal });
+                if (!response.ok) {
+                    throw new Error(`Room search failed: ${response.status}`);
+                }
+
+                const data = await response.json();
+                if (signal.aborted) return;
+                setRooms(data);
+            } catch (err) {
+                if (signal.aborted) return;
+                setError(err instanceof Error ? err : new Error(String(err)));
+            } finally {
+                if (!signal.aborted) setLoading(false);
             }
-
-            const response = await fetchFn(`${apiUrl}/rooms?${params.toString()}`);
-            if (!response.ok) {
-                throw new Error(`Room search failed: ${response.status}`);
-            }
-
-            const data = await response.json();
-            setRooms(data);
-        } catch (err) {
-            setError(err instanceof Error ? err : new Error(String(err)));
-        } finally {
-            setLoading(false);
-        }
-    }, [apiUrl, fetchFn]);
+        },
+        [apiUrl, fetchFn],
+    );
 
     useEffect(() => {
         if (initialQuery) {
             search(initialQuery);
         }
-    }, [search, initialQuery]);
+        return () => requests.current.cancel();
+    }, [search, initialQuery ? JSON.stringify(initialQuery) : null]);
 
     return { rooms, loading, error, search };
 }

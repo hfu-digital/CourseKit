@@ -1,41 +1,49 @@
 # CLAUDE.md
 
+> For project vision, cross-project architecture, and global code style rules, see the root [CLAUDE.md](../CLAUDE.md).
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## What is CourseKit
 
-A timetable engine for academic scheduling, published as two npm packages:
+A timetable engine for academic scheduling, published as multiple npm packages:
 - **`@hfu.digital/coursekit-nestjs`** (`packages/backend/`) — NestJS module with domain services, storage adapters, and constraint system
 - **`@hfu.digital/coursekit-react`** (`packages/frontend/`) — React hooks and components for timetable UI
+- **`@hfu.digital/coursekit-starplan`** (`packages/starplan/`) — framework-agnostic StarPlan integration: iCal parsing, content hashing, room/instructor extraction, RRULE normalization, change detection
 
 ## Development Commands
 
 ```bash
 bun install              # Install all workspace deps
-bun run build            # Build both packages (via Turborepo)
-bun run typecheck        # Type-check both packages
+bun run build            # Build all three packages (via Turborepo, in dependency order)
+bun run typecheck        # Type-check all three packages
 bun run test             # Run all tests
-bun run dev              # Watch mode for both packages
+bun run dev              # Watch mode for all three packages
 ```
 
 ### Package-level commands
 
 ```bash
-# Backend — uses bun:test, Bun bundler for JS, tsc for declarations
+# Backend — uses bun:test; builds with tsc (--outDir dist)
 cd packages/backend
-bun test                              # Run all tests
-bun test src/__tests__/conflict.service.test.ts  # Single test file
-bun run build                         # Build JS + type declarations
+bun test                                          # Run all tests
+bun test src/__tests__/conflict.service.test.ts   # Single test file
+bun run build                                      # Compile to dist/ (tsc)
 
-# Frontend — uses Vite + vite-plugin-dts
+# Starplan — uses bun:test; builds with tsc
+cd packages/starplan
+bun test                                          # Run all tests
+bun test src/__tests__/parser.test.ts             # Single test file
+
+# Frontend — uses Vite + vite-plugin-dts (no tests)
 cd packages/frontend
-bun run build                         # Vite library build (ES + CJS)
-bun run typecheck                     # Type-check only
+bun run build                                      # Vite library build (main + ES module)
+bun run typecheck                                  # Type-check only
 ```
 
 ## Monorepo Structure
 
-Turborepo workspace with `packages/*` and `examples/*` workspaces. Build tasks have `dependsOn: ["^build"]` — backend builds before frontend if needed. All packages use `tsconfig.base.json` at root (ESNext target, strict mode, `verbatimModuleSyntax`).
+Turborepo workspace with `packages/*` and `examples/*` workspaces — three packages: `backend/`, `frontend/`, `starplan/` (plus `examples/nestjs-basic`). Build tasks have `dependsOn: ["^build"]`, so internal cross-package deps are built in topological order. Backend and starplan build with `tsc`; frontend builds with Vite. All packages target strict-mode TypeScript with `verbatimModuleSyntax`.
 
 ## Architecture
 
@@ -83,18 +91,27 @@ Recurring events are never queried as-is. `RecurrenceService.materialize()` expa
 
 ### Frontend Package
 
-React context provider (`CourseKitProvider`) accepts `apiUrl` and optional custom `fetch`. Hooks (`useTimetable`, `useAvailability`, `useConflictCheck`, `useMutation`, `useRoomSearch`) call the backend API. Components (`TimetableGrid`, `EventCard`, `ConflictBadge`, `AvailabilityOverlay`) are unstyled/minimal.
+React context provider (`CourseKitProvider`) accepts `apiUrl` and optional custom `fetch`. Hooks (`useTimetable`, `useAvailability`, `useConflictCheck`, `useMutation`, `useRoomSearch`, `useSemester`, `useChanges`, `useCourseSubscriptions`) call the backend API. Components (`TimetableGrid`, `StudyBlockGrid`, `EventCard`, `ConflictBadge`, `AvailabilityOverlay`) are unstyled/minimal. HFU study-block helpers live in `src/utils/hfu-blocks.ts`.
 
 ## Testing
 
-Backend tests use `bun:test` with in-memory storage adapters — no database required. Test utilities are exported from `@hfu.digital/coursekit-nestjs/testing`:
-- **Factories**: `createTestEvent()`, `createTestRoom()`, `createTestInstructor()`, etc.
-- **Fixtures**: `simpleSchoolWeek`, `universitySemester`, `edgeCaseSchedule`
-- **Helpers**: `EventSpy` for domain event assertions, `expectNoConflicts()`, `expectConflict()`
+Backend and starplan tests use `bun:test` (frontend has no tests). Backend tests use in-memory storage adapters — no database required. Test utilities are exported from `@hfu.digital/coursekit-nestjs/testing` (`src/testing/`):
+- **Factories**: `createTestEvent()`, `createTestRoom()`, `createTestInstructor()`, etc. (`factories.ts`)
+- **Fixtures**: `simpleSchoolWeek`, `universitySemester`, `edgeCaseSchedule` (`fixtures.ts`)
+- **Helpers**: `EventSpy` for domain event assertions (`event-spy.ts`), `expectNoConflicts()`, `expectConflict()` (`assertions.ts`)
 
 ## Publishing
 
-CI publishes on `v*` tags via GitHub Actions. Both packages are published to npm with `bun publish --access public`. The workflow runs `bun install --frozen-lockfile`, then `turbo build` and `turbo test` before publishing.
+CI publishes on `v*` tags via GitHub Actions (`.github/workflows/publish.yml`). The workflow runs `bun install --frozen-lockfile`, then `turbo build` and `turbo test`, after which each of the three packages is published with `npm publish --access public --provenance`.
+
+## Versioning
+
+All `@hfu.digital` Kit packages (CourseKit, RoomKit, LoopKit, BoardKit) use **CalVer** in the form `yyyy.mm.version` — e.g., `2026.04.1`, `2026.04.2`, `2026.05.1`.
+
+- The first release of each calendar month bumps `version` to `1`.
+- Within a month, increments go `1, 2, 3, ...`.
+- Versions are **not semver-comparable**. Downstream consumers should pin **exact** versions and update intentionally — range operators (`^`, `~`) do not carry their usual semantics.
+- Git tags must match the regex `^v[0-9]{4}\.(0[1-9]|1[0-2])\.[0-9]+$`. The publish workflow's `validate-tag` job rejects malformed tags before any build runs.
 
 ## Code Style
 

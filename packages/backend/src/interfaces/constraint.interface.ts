@@ -1,6 +1,11 @@
 import type {
-    TimetableEvent, MaterializedOccurrence, Conflict, DateRange,
-    Room, Availability, AvailabilityEntityType,
+    Availability,
+    AvailabilityEntityType,
+    Conflict,
+    DateRange,
+    MaterializedOccurrence,
+    Room,
+    TimetableEvent,
 } from './types.js';
 
 /**

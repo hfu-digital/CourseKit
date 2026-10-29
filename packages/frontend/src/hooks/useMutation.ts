@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useCourseKitConfig } from '../context/CourseKitProvider.js';
 
 export interface MutationOptions {
@@ -23,48 +23,47 @@ export function useMutation(options?: MutationOptions): UseMutationResult {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
-    const request = useCallback(async (
-        method: string,
-        path: string,
-        body?: unknown,
-    ): Promise<unknown> => {
-        setLoading(true);
-        setError(null);
+    const request = useCallback(
+        async (method: string, path: string, body?: unknown): Promise<unknown> => {
+            setLoading(true);
+            setError(null);
 
-        try {
-            const init: RequestInit = {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-            };
+            try {
+                const init: RequestInit = {
+                    method,
+                    headers: { 'Content-Type': 'application/json' },
+                };
 
-            if (body !== undefined) {
-                init.body = JSON.stringify(body);
+                if (body !== undefined) {
+                    init.body = JSON.stringify(body);
+                }
+
+                const response = await fetchFn(`${apiUrl}${path}`, init);
+
+                if (!response.ok) {
+                    throw new Error(`Request failed: ${response.status}`);
+                }
+
+                // DELETE responses may not have a body
+                if (response.status === 204 || method === 'DELETE') {
+                    options?.onSuccess?.(null);
+                    return null;
+                }
+
+                const data = await response.json();
+                options?.onSuccess?.(data);
+                return data;
+            } catch (err) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                setError(error);
+                options?.onError?.(error);
+                throw error;
+            } finally {
+                setLoading(false);
             }
-
-            const response = await fetchFn(`${apiUrl}${path}`, init);
-
-            if (!response.ok) {
-                throw new Error(`Request failed: ${response.status}`);
-            }
-
-            // DELETE responses may not have a body
-            if (response.status === 204 || method === 'DELETE') {
-                options?.onSuccess?.(null);
-                return null;
-            }
-
-            const data = await response.json();
-            options?.onSuccess?.(data);
-            return data;
-        } catch (err) {
-            const error = err instanceof Error ? err : new Error(String(err));
-            setError(error);
-            options?.onError?.(error);
-            throw error;
-        } finally {
-            setLoading(false);
-        }
-    }, [apiUrl, fetchFn, options?.onSuccess, options?.onError]);
+        },
+        [apiUrl, fetchFn, options?.onSuccess, options?.onError],
+    );
 
     const createEvent = useCallback(
         (data: Record<string, unknown>) => request('POST', '/events', data),
@@ -77,7 +76,9 @@ export function useMutation(options?: MutationOptions): UseMutationResult {
     );
 
     const deleteEvent = useCallback(
-        async (id: string) => { await request('DELETE', `/events/${id}`); },
+        async (id: string) => {
+            await request('DELETE', `/events/${id}`);
+        },
         [request],
     );
 
@@ -87,9 +88,19 @@ export function useMutation(options?: MutationOptions): UseMutationResult {
     );
 
     const deleteException = useCallback(
-        async (id: string) => { await request('DELETE', `/exceptions/${id}`); },
+        async (id: string) => {
+            await request('DELETE', `/exceptions/${id}`);
+        },
         [request],
     );
 
-    return { loading, error, createEvent, updateEvent, deleteEvent, createException, deleteException };
+    return {
+        loading,
+        error,
+        createEvent,
+        updateEvent,
+        deleteEvent,
+        createException,
+        deleteException,
+    };
 }

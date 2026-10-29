@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { ScheduleConstraint } from '../interfaces/constraint.interface.js';
 import type { ConstraintContext } from '../interfaces/constraint.interface.js';
-import type { MaterializedOccurrence, Conflict } from '../interfaces/types.js';
+import { ScheduleConstraint } from '../interfaces/constraint.interface.js';
+import type { Conflict, MaterializedOccurrence } from '../interfaces/types.js';
 
 @Injectable()
 export class OverlapConstraint extends ScheduleConstraint {

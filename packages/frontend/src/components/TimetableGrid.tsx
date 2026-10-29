@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react';
+import { type ReactNode, useMemo } from 'react';
 
 export interface TimetableGridEvent {
     id: string;
@@ -13,9 +13,15 @@ export interface TimetableGridProps {
     startHour?: number;
     /** End hour of the grid (default: 20) */
     endHour?: number;
-    /** Days to display (default: Mon-Fri) */
+    /** Days to display (default: Mon-Fri). Pass 6 entries for Mon-Sat, 7 for full week. */
     days?: string[];
-    /** The date of the first day (Monday) */
+    /**
+     * Day-of-week index (0=Sunday, 1=Monday, ..., 6=Saturday) that the first
+     * `days` entry corresponds to. Defaults to 1 (Monday). Used by consumers
+     * who want a Sunday-start (US) or Saturday-start (some institutions) week.
+     */
+    weekStartsOn?: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+    /** The date of the first day in the visible week (must align with `weekStartsOn`). */
     weekStart: string;
     /** Events to render */
     events?: TimetableGridEvent[];
@@ -75,12 +81,17 @@ export function TimetableGrid({
     startHour = 8,
     endHour = 20,
     days = DEFAULT_DAYS,
+    weekStartsOn = 1,
     weekStart,
     events = [],
     renderEvent,
     hourHeight = 60,
     className,
 }: TimetableGridProps) {
+    // weekStartsOn is currently informational — consumers must align `weekStart`
+    // and `dayIndex` values themselves. Reserved for future date-aware filtering.
+    void weekStartsOn;
+    void weekStart;
     const totalHours = endHour - startHour;
     const hours = useMemo(
         () => Array.from({ length: totalHours }, (_, i) => startHour + i),
@@ -92,15 +103,21 @@ export function TimetableGrid({
     return (
         <div
             className={className}
-            style={className ? undefined : {
-                ...gridStyles.container,
-                gridTemplateColumns,
-            }}
+            style={
+                className
+                    ? undefined
+                    : {
+                          ...gridStyles.container,
+                          gridTemplateColumns,
+                      }
+            }
         >
             {/* Header row */}
             <div style={gridStyles.headerCell} />
             {days.map((day) => (
-                <div key={day} style={gridStyles.headerCell}>{day}</div>
+                <div key={day} style={gridStyles.headerCell}>
+                    {day}
+                </div>
             ))}
 
             {/* Time rows */}
@@ -119,44 +136,46 @@ export function TimetableGrid({
                             }}
                         >
                             {/* Render events that start in this day */}
-                            {hour === startHour && events
-                                .filter(e => e.dayIndex === dayIdx)
-                                .map(event => {
-                                    const eventDate = new Date(event.startTime);
-                                    const eventHour = eventDate.getHours() + eventDate.getMinutes() / 60;
-                                    const top = (eventHour - startHour) * hourHeight;
-                                    const height = (event.durationMin / 60) * hourHeight;
+                            {hour === startHour &&
+                                events
+                                    .filter((e) => e.dayIndex === dayIdx)
+                                    .map((event) => {
+                                        const eventDate = new Date(event.startTime);
+                                        const eventHour =
+                                            eventDate.getHours() + eventDate.getMinutes() / 60;
+                                        const top = (eventHour - startHour) * hourHeight;
+                                        const height = (event.durationMin / 60) * hourHeight;
 
-                                    if (renderEvent) {
+                                        if (renderEvent) {
+                                            return (
+                                                <div
+                                                    key={event.id}
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: `${top}px`,
+                                                        height: `${height}px`,
+                                                        left: '2px',
+                                                        right: '2px',
+                                                    }}
+                                                >
+                                                    {renderEvent(event)}
+                                                </div>
+                                            );
+                                        }
+
                                         return (
                                             <div
                                                 key={event.id}
                                                 style={{
-                                                    position: 'absolute',
+                                                    ...gridStyles.eventBlock,
                                                     top: `${top}px`,
                                                     height: `${height}px`,
-                                                    left: '2px',
-                                                    right: '2px',
                                                 }}
                                             >
-                                                {renderEvent(event)}
+                                                {event.title}
                                             </div>
                                         );
-                                    }
-
-                                    return (
-                                        <div
-                                            key={event.id}
-                                            style={{
-                                                ...gridStyles.eventBlock,
-                                                top: `${top}px`,
-                                                height: `${height}px`,
-                                            }}
-                                        >
-                                            {event.title}
-                                        </div>
-                                    );
-                                })}
+                                    })}
                         </div>
                     ))}
                 </div>

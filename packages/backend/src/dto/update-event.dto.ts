@@ -1,4 +1,12 @@
-import { IsString, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsDateString, Min } from 'class-validator';
+import {
+    IsDateString,
+    IsNotEmpty,
+    IsNumber,
+    IsOptional,
+    IsPositive,
+    IsString,
+    Min,
+} from 'class-validator';
 import type { ValidationResult } from '../interfaces/types.js';
 
 export class UpdateEventDto {
@@ -50,19 +58,38 @@ export class UpdateEventDto {
         const d = data as Record<string, unknown>;
 
         if (d.title !== undefined && (typeof d.title !== 'string' || d.title.trim().length === 0)) {
-            errors.push({ field: 'title', message: 'Title must be a non-empty string', value: d.title });
+            errors.push({
+                field: 'title',
+                message: 'Title must be a non-empty string',
+                value: d.title,
+            });
         }
 
         if (d.startTime !== undefined) {
             if (typeof d.startTime !== 'string' && !(d.startTime instanceof Date)) {
-                errors.push({ field: 'startTime', message: 'startTime must be a date string', value: d.startTime });
+                errors.push({
+                    field: 'startTime',
+                    message: 'startTime must be a date string',
+                    value: d.startTime,
+                });
             } else if (typeof d.startTime === 'string' && isNaN(Date.parse(d.startTime))) {
-                errors.push({ field: 'startTime', message: 'startTime must be a valid date', value: d.startTime });
+                errors.push({
+                    field: 'startTime',
+                    message: 'startTime must be a valid date',
+                    value: d.startTime,
+                });
             }
         }
 
-        if (d.durationMin !== undefined && (typeof d.durationMin !== 'number' || d.durationMin < 1)) {
-            errors.push({ field: 'durationMin', message: 'durationMin must be a positive number', value: d.durationMin });
+        if (
+            d.durationMin !== undefined &&
+            (typeof d.durationMin !== 'number' || d.durationMin < 1)
+        ) {
+            errors.push({
+                field: 'durationMin',
+                message: 'durationMin must be a positive number',
+                value: d.durationMin,
+            });
         }
 
         return { valid: errors.length === 0, errors };

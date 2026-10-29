@@ -3,7 +3,7 @@
 export interface StudyBlock {
     block: number;
     start: string; // HH:MM
-    end: string;   // HH:MM
+    end: string; // HH:MM
 }
 
 export const STUDY_BLOCKS: StudyBlock[] = [

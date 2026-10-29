@@ -76,7 +76,9 @@ export function EventCard({
             onClick={onClick}
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick?.(); }}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') onClick?.();
+            }}
         >
             <div style={className ? undefined : defaultStyles.title}>{title}</div>
             <div style={className ? undefined : defaultStyles.meta}>

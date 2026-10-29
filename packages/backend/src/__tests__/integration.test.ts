@@ -1,17 +1,18 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
+import { OverlapConstraint } from '../constraints/overlap.constraint.js';
+import { QueryService } from '../domain/query.service.js';
 import { RecurrenceService } from '../domain/recurrence.service.js';
 import { TimeService } from '../domain/time.service.js';
-import { QueryService } from '../domain/query.service.js';
-import { InMemoryTimetableEventStorage } from '../testing/memory-event-storage.adapter.js';
-import { InMemoryRoomStorage } from '../testing/memory-room-storage.adapter.js';
-import { InMemoryInstructorStorage } from '../testing/memory-instructor-storage.adapter.js';
-import { InMemoryGroupStorage } from '../testing/memory-group-storage.adapter.js';
-import { InMemoryAvailabilityStorage } from '../testing/memory-availability-storage.adapter.js';
-import { InMemoryAcademicPeriodStorage } from '../testing/memory-period-storage.adapter.js';
-import { InMemoryCourseStorage } from '../testing/memory-course-storage.adapter.js';
-import { OverlapConstraint } from '../constraints/overlap.constraint.js';
+import { VersionConflictError } from '../errors/index.js';
 import { EventSpy } from '../testing/event-spy.js';
-import { createTestRoom, createTestInstructor } from '../testing/factories.js';
+import { createTestInstructor, createTestRoom } from '../testing/factories.js';
+import { InMemoryAvailabilityStorage } from '../testing/memory-availability-storage.adapter.js';
+import { InMemoryCourseStorage } from '../testing/memory-course-storage.adapter.js';
+import { InMemoryTimetableEventStorage } from '../testing/memory-event-storage.adapter.js';
+import { InMemoryGroupStorage } from '../testing/memory-group-storage.adapter.js';
+import { InMemoryInstructorStorage } from '../testing/memory-instructor-storage.adapter.js';
+import { InMemoryAcademicPeriodStorage } from '../testing/memory-period-storage.adapter.js';
+import { InMemoryRoomStorage } from '../testing/memory-room-storage.adapter.js';
 
 describe('CourseKit Integration', () => {
     function createTestSetup() {
@@ -89,13 +90,13 @@ describe('CourseKit Integration', () => {
 
         // Verify cancelled occurrence is excluded
         const hasCancelled = occurrences.some(
-            o => o.occurrenceDate.getTime() === new Date('2026-03-09T09:00:00Z').getTime(),
+            (o) => o.occurrenceDate.getTime() === new Date('2026-03-09T09:00:00Z').getTime(),
         );
         expect(hasCancelled).toBe(false);
 
         // Verify modified occurrence has updated properties
         const modified = occurrences.find(
-            o => o.occurrenceDate.getTime() === new Date('2026-03-16T09:00:00Z').getTime(),
+            (o) => o.occurrenceDate.getTime() === new Date('2026-03-16T09:00:00Z').getTime(),
         );
         expect(modified).toBeDefined();
         expect(modified!.startTime.getTime()).toBe(new Date('2026-03-16T14:00:00Z').getTime());
@@ -143,7 +144,7 @@ describe('CourseKit Integration', () => {
 
         // The gap between 10:30 and 14:00 is the largest
         const largestSlot = freeSlots.reduce((max, slot) =>
-            slot.durationMin > max.durationMin ? slot : max
+            slot.durationMin > max.durationMin ? slot : max,
         );
         expect(largestSlot.durationMin).toBeGreaterThanOrEqual(180); // ~3.5 hours
     });
@@ -265,7 +266,9 @@ describe('CourseKit Integration', () => {
             await eventStorage.update(event.id, { title: 'Conflict' }, 0);
             expect(true).toBe(false); // Should not reach here
         } catch (error) {
-            expect((error as Error).message).toContain('Version conflict');
+            expect(error).toBeInstanceOf(VersionConflictError);
+            expect((error as VersionConflictError).expectedVersion).toBe(0);
+            expect((error as VersionConflictError).actualVersion).toBe(1);
         }
     });
 });

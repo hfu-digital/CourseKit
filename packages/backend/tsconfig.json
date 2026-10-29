@@ -4,7 +4,8 @@
         "outDir": "./dist",
         "rootDir": "./src",
         "experimentalDecorators": true,
-        "emitDecoratorMetadata": true
+        "emitDecoratorMetadata": true,
+        "isolatedModules": false
     },
     "include": ["src/**/*.ts"],
     "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts"]

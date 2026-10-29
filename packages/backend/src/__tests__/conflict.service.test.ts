@@ -1,8 +1,13 @@
-import { describe, it, expect } from 'bun:test';
+import { describe, expect, it } from 'bun:test';
 import { OverlapConstraint } from '../constraints/overlap.constraint.js';
-import { createTestEvent } from '../testing/factories.js';
-import type { MaterializedOccurrence, ConstraintContext, TimetableEvent, DateRange } from '../interfaces/types.js';
 import type { ConstraintContext as CC } from '../interfaces/constraint.interface.js';
+import type {
+    ConstraintContext,
+    DateRange,
+    MaterializedOccurrence,
+    TimetableEvent,
+} from '../interfaces/types.js';
+import { createTestEvent } from '../testing/factories.js';
 
 describe('OverlapConstraint', () => {
     const constraint = new OverlapConstraint();
@@ -82,7 +87,7 @@ describe('OverlapConstraint', () => {
 
         const conflicts = await constraint.evaluate(occurrences, context);
         expect(conflicts.length).toBeGreaterThan(0);
-        expect(conflicts.some(c => c.type === 'instructor-double-book')).toBe(true);
+        expect(conflicts.some((c) => c.type === 'instructor-double-book')).toBe(true);
     });
 
     it('should not flag adjacent (non-overlapping) events', async () => {

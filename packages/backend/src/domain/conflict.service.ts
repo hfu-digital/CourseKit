@@ -1,16 +1,21 @@
+import { readBatch, byKey } from './batch.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import type { ConstraintContext, ScheduleConstraint } from '../interfaces/constraint.interface.js';
+import { DOMAIN_EVENTS } from '../interfaces/domain-events.interface.js';
 import { TimetableEventStorage } from '../interfaces/event-storage.interface.js';
-import { RoomStorage } from '../interfaces/room-storage.interface.js';
 import { GroupStorage } from '../interfaces/group-storage.interface.js';
-import { TimeService } from './time.service.js';
+import { RoomStorage } from '../interfaces/room-storage.interface.js';
+import type {
+    Conflict,
+    ConflictCheckResult,
+    DateRange,
+    MaterializedOccurrence,
+    TimetableEvent,
+} from '../interfaces/types.js';
 import { AvailabilityService } from './availability.service.js';
 import { RecurrenceService } from './recurrence.service.js';
-import { DOMAIN_EVENTS } from '../interfaces/domain-events.interface.js';
-import type { ScheduleConstraint, ConstraintContext } from '../interfaces/constraint.interface.js';
-import type {
-    TimetableEvent, ConflictCheckResult, DateRange, MaterializedOccurrence, Conflict,
-} from '../interfaces/types.js';
+import { TimeService } from './time.service.js';
 
 @Injectable()
 export class ConflictService {
@@ -35,14 +40,15 @@ export class ConflictService {
 
         // Materialize all events into occurrences
         const allOccurrences: MaterializedOccurrence[] = [];
+        const exceptionMap = byKey(await readBatch(allEvents.map(e => e.id), this.eventStorage.findExceptionsBatch?.bind(this.eventStorage), id => this.eventStorage.findExceptions(id)), e => e.eventId);
         for (const ev of allEvents) {
-            const exceptions = await this.eventStorage.findExceptions(ev.id);
+            const exceptions = exceptionMap.get(ev.id) ?? [];
             const occurrences = this.recurrence.materialize(ev, exceptions, dateRange);
             allOccurrences.push(...occurrences);
         }
 
         // Build the constraint context
-        const context = this.buildContext(dateRange, allEvents);
+        const context = this.buildContext(dateRange, allEvents, allOccurrences);
 
         // Evaluate all constraints
         const allConflicts: Conflict[] = [];
@@ -52,8 +58,8 @@ export class ConflictService {
         }
 
         const result: ConflictCheckResult = {
-            hasErrors: allConflicts.some(c => c.severity === 'error'),
-            hasWarnings: allConflicts.some(c => c.severity === 'warning'),
+            hasErrors: allConflicts.some((c) => c.severity === 'error'),
+            hasWarnings: allConflicts.some((c) => c.severity === 'warning'),
             conflicts: allConflicts,
         };
 
@@ -89,20 +95,21 @@ export class ConflictService {
 
         // Materialize all events into occurrences
         const allOccurrences: MaterializedOccurrence[] = [];
+        const exceptionMap = byKey(await readBatch(allEvents.filter(e => e.id !== tempEvent.id).map(e => e.id), this.eventStorage.findExceptionsBatch?.bind(this.eventStorage), id => this.eventStorage.findExceptions(id)), e => e.eventId);
         for (const ev of allEvents) {
             if (ev.id === tempEvent.id) {
                 // For the proposed event, materialize without exceptions
                 const occurrences = this.recurrence.materialize(ev, [], dateRange);
                 allOccurrences.push(...occurrences);
             } else {
-                const exceptions = await this.eventStorage.findExceptions(ev.id);
+                const exceptions = exceptionMap.get(ev.id) ?? [];
                 const occurrences = this.recurrence.materialize(ev, exceptions, dateRange);
                 allOccurrences.push(...occurrences);
             }
         }
 
         // Build the constraint context (with dry-run overrides for the temp event)
-        const baseContext = this.buildContext(dateRange, allEvents);
+        const baseContext = this.buildContext(dateRange, allEvents, allOccurrences, tempEvent.id);
         const context: ConstraintContext = {
             ...baseContext,
             getInstructorsForEvent: async (eventId: string) => {
@@ -123,33 +130,52 @@ export class ConflictService {
         }
 
         return {
-            hasErrors: allConflicts.some(c => c.severity === 'error'),
-            hasWarnings: allConflicts.some(c => c.severity === 'warning'),
+            hasErrors: allConflicts.some((c) => c.severity === 'error'),
+            hasWarnings: allConflicts.some((c) => c.severity === 'warning'),
             conflicts: allConflicts,
         };
     }
 
-    private buildContext(dateRange: DateRange, allEvents: TimetableEvent[]): ConstraintContext {
+    private buildContext(dateRange: DateRange, allEvents: TimetableEvent[], occurrences: MaterializedOccurrence[], excludedEventId?: string): ConstraintContext {
+        let isAvailable: ReturnType<AvailabilityService['createChecker']> | undefined;
+        const ids = allEvents.map(e => e.id).filter(id => id !== excludedEventId);
+        let instructors: Promise<Map<string, import('../interfaces/types.js').EventInstructor[]>> | undefined;
+        let groups: Promise<Map<string, import('../interfaces/types.js').EventGroup[]>> | undefined;
+        let rooms: Promise<Map<string, import('../interfaces/types.js').Room | null>> | undefined;
+        let counts: Promise<Map<string, import('../interfaces/types.js').StudentGroup[]>> | undefined;
         return {
             dateRange,
             allEvents,
             getInstructorsForEvent: async (eventId: string) => {
-                const instructors = await this.eventStorage.findInstructors(eventId);
-                return instructors.map(i => i.instructorId);
+                instructors ??= readBatch(ids, this.eventStorage.findInstructorsBatch?.bind(this.eventStorage), id => this.eventStorage.findInstructors(id)).then(rows => byKey(rows, r => r.eventId));
+                return ((await instructors).get(eventId) ?? []).map(i => i.instructorId);
             },
             getGroupsForEvent: async (eventId: string) => {
-                const groups = await this.eventStorage.findGroups(eventId);
-                return groups.map(g => g.groupId);
+                groups ??= readBatch(ids, this.eventStorage.findGroupsBatch?.bind(this.eventStorage), id => this.eventStorage.findGroups(id)).then(rows => byKey(rows, r => r.eventId));
+                return ((await groups).get(eventId) ?? []).map(g => g.groupId);
             },
             getRoomById: async (roomId: string) => {
-                return this.roomStorage.findById(roomId);
+                rooms ??= readBatch([...new Set([...occurrences.map(e => e.roomId).filter((id): id is string => !!id), roomId])], this.roomStorage.findByIds?.bind(this.roomStorage), async id => { const room = await this.roomStorage.findById(id); return room ? [room] : []; }).then(rows => new Map(rows.map(r => [r.id, r])));
+                const map = await rooms;
+                // Modified recurrence exceptions can introduce rooms absent on the base events.
+                if (!map.has(roomId)) { const room = await this.roomStorage.findById(roomId); map.set(roomId, room); }
+                return map.get(roomId) ?? null;
             },
             getGroupStudentCount: async (groupId: string) => {
-                const students = await this.groupStorage.findStudents(groupId);
-                return students.length;
+                groups ??= readBatch(ids, this.eventStorage.findGroupsBatch?.bind(this.eventStorage), id => this.eventStorage.findGroups(id)).then(rows => byKey(rows, r => r.eventId));
+                counts ??= groups.then(map => readBatch([...map.values()].flat().map(g => g.groupId), this.groupStorage.findStudentsBatch?.bind(this.groupStorage), id => this.groupStorage.findStudents(id))).then(rows => byKey(rows, r => r.groupId));
+                return (await counts).get(groupId)?.length ?? 0;
             },
             isEntityAvailable: async (entityType, entityId, start, durationMin) => {
-                return this.availability.isAvailable(entityType, entityId, start, durationMin);
+                if (!isAvailable) {
+                    instructors ??= readBatch(ids, this.eventStorage.findInstructorsBatch?.bind(this.eventStorage), id => this.eventStorage.findInstructors(id)).then(rows => byKey(rows, r => r.eventId));
+                    const entities = [
+                        ...occurrences.filter(o => o.roomId).map(o => ({ entityType: 'room' as const, entityId: o.roomId! })),
+                        ...[...(await instructors).values()].flat().map(i => ({ entityType: 'instructor' as const, entityId: i.instructorId })),
+                    ];
+                    isAvailable = this.availability.createChecker(entities);
+                }
+                return isAvailable(entityType, entityId, start, durationMin);
             },
         };
     }

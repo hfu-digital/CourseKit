@@ -1,11 +1,11 @@
-import { Injectable } from '@nestjs/common';
 import {
-    RecurrenceService,
-    QueryService,
     ConflictService,
-    TimetableEventStorage,
+    QueryService,
+    RecurrenceService,
     RoomStorage,
+    TimetableEventStorage,
 } from '@hfu.digital/coursekit-nestjs';
+import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class DemoService {
@@ -92,7 +92,9 @@ export class DemoService {
             entityIds: [{ type: 'room', id: room.id }],
         });
         for (const slot of freeSlots) {
-            console.log(`  - ${slot.start.toISOString()} to ${slot.end.toISOString()} (${slot.durationMin} min)`);
+            console.log(
+                `  - ${slot.start.toISOString()} to ${slot.end.toISOString()} (${slot.durationMin} min)`,
+            );
         }
 
         console.log('\n=== Done ===');

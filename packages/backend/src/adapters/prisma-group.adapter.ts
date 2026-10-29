@@ -24,6 +24,10 @@ export class PrismaGroupAdapter extends GroupStorage {
         super();
     }
 
+    async findStudentsBatch(ids: string[]): Promise<StudentGroup[]> {
+        return ids.length ? this.studentGroupDelegate.findMany({ where: { groupId: { in: ids } } }) : [];
+    }
+
     async create(data: Omit<Group, 'id'>): Promise<Group> {
         return this.groupDelegate.create({ data });
     }

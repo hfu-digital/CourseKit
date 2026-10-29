@@ -14,6 +14,10 @@ export class PrismaRoomAdapter extends RoomStorage {
         super();
     }
 
+    async findByIds(ids: string[]): Promise<Room[]> {
+        return ids.length ? this.delegate.findMany({ where: { id: { in: ids } } }) : [];
+    }
+
     async create(data: Omit<Room, 'id'>): Promise<Room> {
         return this.delegate.create({ data });
     }
@@ -22,7 +26,12 @@ export class PrismaRoomAdapter extends RoomStorage {
         return this.delegate.findUnique({ where: { id } });
     }
 
-    async findAll(filters?: { building?: string; campus?: string; minCapacity?: number; tags?: Record<string, unknown> }): Promise<Room[]> {
+    async findAll(filters?: {
+        building?: string;
+        campus?: string;
+        minCapacity?: number;
+        tags?: Record<string, unknown>;
+    }): Promise<Room[]> {
         const where: any = {};
 
         if (filters?.building) {

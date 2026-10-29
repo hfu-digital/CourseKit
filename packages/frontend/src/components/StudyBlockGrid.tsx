@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react';
-import { STUDY_BLOCKS, getStudyBlockFromTime, getEventHeight } from '../utils/hfu-blocks.js';
+import { getEventHeight, getStudyBlockFromTime, STUDY_BLOCKS } from '../utils/hfu-blocks.js';
 
 export interface StudyBlockEvent {
     id: string;
@@ -125,11 +125,16 @@ export function StudyBlockGrid({
                     {/* Day cells */}
                     {days.map((day, dayIdx) => {
                         const blockEvents = events.filter(
-                            (e) => e.dayIndex === dayIdx && getStudyBlockFromTime(e.startTime) === block,
+                            (e) =>
+                                e.dayIndex === dayIdx &&
+                                getStudyBlockFromTime(e.startTime) === block,
                         );
 
                         return (
-                            <div key={`${day}-${block}`} style={{ ...styles.dayCell, height: blockHeight }}>
+                            <div
+                                key={`${day}-${block}`}
+                                style={{ ...styles.dayCell, height: blockHeight }}
+                            >
                                 {blockEvents.map((event) => {
                                     const height = getEventHeight(event.endTime, start, end);
 
@@ -145,7 +150,10 @@ export function StudyBlockGrid({
                                     }
 
                                     return (
-                                        <div key={event.id} style={{ ...styles.eventBlock, height }}>
+                                        <div
+                                            key={event.id}
+                                            style={{ ...styles.eventBlock, height }}
+                                        >
                                             {event.title}
                                         </div>
                                     );

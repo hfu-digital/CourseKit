@@ -1,5 +1,10 @@
-import type { TimetableEvent, Room, Instructor, Group } from '../interfaces/types.js';
-import { createTestEvent, createTestRoom, createTestInstructor, createTestGroup } from './factories.js';
+import type { Group, Instructor, Room, TimetableEvent } from '../interfaces/types.js';
+import {
+    createTestEvent,
+    createTestGroup,
+    createTestInstructor,
+    createTestRoom,
+} from './factories.js';
 
 export interface FixtureData {
     events: TimetableEvent[];
@@ -23,12 +28,14 @@ export function simpleSchoolWeek(): FixtureData {
         const startTime = new Date(baseDate);
         startTime.setDate(startTime.getDate() + day);
 
-        events.push(createTestEvent({
-            title: `CS101 Lecture - Day ${day + 1}`,
-            startTime,
-            durationMin: 90,
-            roomId: room.id,
-        }));
+        events.push(
+            createTestEvent({
+                title: `CS101 Lecture - Day ${day + 1}`,
+                startTime,
+                durationMin: 90,
+                roomId: room.id,
+            }),
+        );
     }
 
     return { events, rooms: [room], instructors: [instructor], groups: [group] };

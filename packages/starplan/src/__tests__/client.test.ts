@@ -1,0 +1,220 @@
+import { describe, expect, it } from 'bun:test';
+import { StarPlanClient } from '../client/starplan-client.js';
+import { parseIcal } from '../parser/ical.js';
+
+const jsonResponse = (value: unknown) =>
+    new Response(JSON.stringify(value), {
+        headers: { 'content-type': 'application/json; charset=utf-8' },
+    });
+
+describe('StarPlanClient', () => {
+    it('fetches programs and semesters using the StarPlan JSON contract', async () => {
+        const requests: string[] = [];
+        const client = new StarPlanClient({
+            baseUrl: 'https://splan.example.test/starplan/',
+            planningUnit: '5',
+            fetchImpl: async (input) => {
+                const url = String(input);
+                requests.push(url);
+                if (url.includes('getogs')) {
+                    return jsonResponse([[{ id: 41, name: 'Angewandte Informatik', shortname: 'AIN' }]]);
+                }
+                return jsonResponse([[{ id: 1742, name: 'AIN1', shortname: '1' }]]);
+            },
+        });
+
+        await expect(client.fetchPrograms()).resolves.toEqual([
+            { id: '41', name: 'Angewandte Informatik', shortName: 'AIN' },
+        ]);
+        await expect(client.fetchSemesters('41')).resolves.toEqual([
+            { id: '1742', programId: '41', name: 'AIN1', shortName: '1' },
+        ]);
+        expect(requests).toEqual([
+            'https://splan.example.test/starplan/json?m=getogs',
+            'https://splan.example.test/starplan/json?m=getPgsExt&pu=5&og=41',
+        ]);
+    });
+
+    it('preserves source lecture metadata with stable normalized fields', async () => {
+        const client = new StarPlanClient({
+            baseUrl: 'https://splan.example.test/starplan',
+            planningUnit: '5',
+            fetchImpl: async () =>
+                jsonResponse([
+                    [
+                        {
+                            id: 1742,
+                            name: 'AIN1',
+                            shortname: '1',
+                            lectures: [
+                                { id: 9001, name: 'Datenbanken', shortname: 'DB' },
+                                { id: '9002', name: 'Programmierung', code: 'PRG' },
+                                { name: 'Ohne Code' },
+                            ],
+                        },
+                    ],
+                ]),
+        });
+
+        await expect(client.fetchSemesters('41')).resolves.toEqual([
+            {
+                id: '1742',
+                programId: '41',
+                name: 'AIN1',
+                shortName: '1',
+                lectures: [
+                    { id: '9001', name: 'Datenbanken', code: 'DB' },
+                    { id: '9002', name: 'Programmierung', code: 'PRG' },
+                    { name: 'Ohne Code' },
+                ],
+            },
+        ]);
+    });
+
+    it('builds the canonical semester iCal URL and decodes ISO-8859-1 data', async () => {
+        const latin1 = Uint8Array.from([
+            66,
+            69,
+            71,
+            73,
+            78,
+            58,
+            86,
+            67,
+            65,
+            76,
+            69,
+            78,
+            68,
+            65,
+            82,
+            10,
+            83,
+            85,
+            77,
+            77,
+            65,
+            82,
+            89,
+            58,
+            77,
+            97,
+            114,
+            122,
+            10,
+            69,
+            78,
+            68,
+            58,
+            86,
+            67,
+            65,
+            76,
+            69,
+            78,
+            68,
+            65,
+            82,
+        ]);
+        let requestedUrl = '';
+        const client = new StarPlanClient({
+            baseUrl: 'https://splan.example.test/starplan',
+            planningUnit: '5',
+            fetchImpl: async (input) => {
+                requestedUrl = String(input);
+                return new Response(latin1, {
+                    headers: { 'content-type': 'text/calendar; charset=iso-8859-1' },
+                });
+            },
+        });
+
+        await expect(client.fetchIcal('1742')).resolves.toContain('SUMMARY:Marz');
+        expect(requestedUrl).toBe(
+            'https://splan.example.test/starplan/ical?lan=de&puid=5&type=pg&pgid=1742',
+        );
+        expect(client.getIcalUrl('semester/1742')).toBe(
+            'https://splan.example.test/starplan/ical?lan=de&puid=5&type=pg&pgid=semester%2F1742',
+        );
+    });
+
+    it('throws a useful error for non-successful responses', async () => {
+        const client = new StarPlanClient({
+            baseUrl: 'https://splan.example.test/starplan',
+            planningUnit: '5',
+            fetchImpl: async () => new Response('unavailable', { status: 503, statusText: 'Unavailable' }),
+        });
+
+        await expect(client.fetchIcal('1742')).rejects.toThrow('HTTP 503: Unavailable');
+    });
+
+    it('rejects HTML error pages instead of passing them to an iCal parser', async () => {
+        let attempts = 0;
+        const client = new StarPlanClient({
+            baseUrl: 'https://splan.example.test/starplan',
+            planningUnit: '5',
+            fetchImpl: async () => {
+                attempts++;
+                return new Response('<!DOCTYPE html><html><body>temporarily unavailable</body></html>', {
+                    headers: { 'content-type': 'text/html; charset=utf-8' },
+                });
+            },
+        });
+
+        await expect(client.fetchIcal('1742')).rejects.toThrow(
+            'StarPlan iCal response was not a calendar',
+        );
+        expect(attempts).toBe(5);
+    });
+
+    it('recovers when a transient HTML error clears and returns the calendar', async () => {
+        let attempts = 0;
+        const calendar = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'BEGIN:VEVENT',
+            'UID:recovered-lecture',
+            'SUMMARY:Recovered lecture',
+            'DTSTART:20260427T080000',
+            'DTEND:20260427T093000',
+            'END:VEVENT',
+            'END:VCALENDAR',
+        ].join('\r\n');
+        const client = new StarPlanClient({
+            baseUrl: 'https://splan.example.test/starplan',
+            planningUnit: '5',
+            fetchImpl: async () => {
+                attempts++;
+                if (attempts < 4) {
+                    return new Response(
+                        '<!DOCTYPE html><html><body>temporarily unavailable</body></html>',
+                        { headers: { 'content-type': 'text/html; charset=utf-8' } },
+                    );
+                }
+                return new Response(calendar, {
+                    headers: { 'content-type': 'text/calendar; charset=utf-8' },
+                });
+            },
+        });
+
+        const recoveredFeed = await client.fetchIcal('1742');
+        expect(parseIcal(recoveredFeed).map((event) => event.summary)).toEqual([
+            'Recovered lecture',
+        ]);
+        expect(attempts).toBe(4);
+    });
+
+    it('rejects HTML responses for JSON endpoints with a useful error', async () => {
+        const client = new StarPlanClient({
+            baseUrl: 'https://splan.example.test/starplan',
+            planningUnit: '5',
+            fetchImpl: async () =>
+                new Response('<!DOCTYPE html><html><body>proxy error</body></html>', {
+                    headers: { 'content-type': 'text/html; charset=utf-8' },
+                }),
+        });
+
+        await expect(client.fetchPrograms()).rejects.toThrow(
+            'StarPlan program list response was not valid JSON',
+        );
+    });
+});

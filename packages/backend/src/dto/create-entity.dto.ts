@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsIn, Min } from 'class-validator';
+import { IsIn, IsNotEmpty, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import type { ValidationResult } from '../interfaces/types.js';
 
 export class CreateRoomDto {
@@ -31,7 +31,11 @@ export class CreateRoomDto {
             errors.push({ field: 'name', message: 'name is required', value: d.name });
         }
         if (d.capacity === undefined || typeof d.capacity !== 'number' || d.capacity < 0) {
-            errors.push({ field: 'capacity', message: 'capacity must be a non-negative number', value: d.capacity });
+            errors.push({
+                field: 'capacity',
+                message: 'capacity must be a non-negative number',
+                value: d.capacity,
+            });
         }
         return { valid: errors.length === 0, errors };
     }
@@ -86,7 +90,11 @@ export class CreateGroupDto {
             errors.push({ field: 'name', message: 'name is required', value: d.name });
         }
         if (!d.type || !['fixed', 'enrollment'].includes(d.type as string)) {
-            errors.push({ field: 'type', message: 'type must be fixed or enrollment', value: d.type });
+            errors.push({
+                field: 'type',
+                message: 'type must be fixed or enrollment',
+                value: d.type,
+            });
         }
         return { valid: errors.length === 0, errors };
     }

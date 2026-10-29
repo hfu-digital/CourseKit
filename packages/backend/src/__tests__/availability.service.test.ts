@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
+import { beforeEach, describe, expect, it } from 'bun:test';
 import { AvailabilityService } from '../domain/availability.service.js';
 import { RecurrenceService } from '../domain/recurrence.service.js';
-import { InMemoryAvailabilityStorage } from '../testing/memory-availability-storage.adapter.js';
+import { EntityNotFoundError } from '../errors/index.js';
 import { EventSpy } from '../testing/event-spy.js';
+import { InMemoryAvailabilityStorage } from '../testing/memory-availability-storage.adapter.js';
 
 describe('AvailabilityService', () => {
     let service: AvailabilityService;
@@ -77,21 +78,24 @@ describe('AvailabilityService', () => {
             expect(spy.wasEmitted('coursekit.availability.deleted')).toBe(true);
         });
 
-        it('should throw when updating non-existent rule', async () => {
+        it('should throw EntityNotFoundError when updating non-existent rule', async () => {
             try {
                 await service.update('nonexistent', { hardness: 'soft' });
                 expect(true).toBe(false);
             } catch (error) {
-                expect((error as Error).message).toContain('not found');
+                expect(error).toBeInstanceOf(EntityNotFoundError);
+                expect((error as EntityNotFoundError).entityType).toBe('Availability');
+                expect((error as EntityNotFoundError).entityId).toBe('nonexistent');
             }
         });
 
-        it('should throw when deleting non-existent rule', async () => {
+        it('should throw EntityNotFoundError when deleting non-existent rule', async () => {
             try {
                 await service.delete('nonexistent');
                 expect(true).toBe(false);
             } catch (error) {
-                expect((error as Error).message).toContain('not found');
+                expect(error).toBeInstanceOf(EntityNotFoundError);
+                expect((error as EntityNotFoundError).entityType).toBe('Availability');
             }
         });
     });
@@ -250,7 +254,7 @@ describe('AvailabilityService', () => {
             );
 
             // The 8:00-9:00 gap is only 60 min, should be excluded
-            expect(slots.every(s => s.durationMin >= 120)).toBe(true);
+            expect(slots.every((s) => s.durationMin >= 120)).toBe(true);
         });
     });
 });

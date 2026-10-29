@@ -1,5 +1,19 @@
-import { IsString, IsNotEmpty, IsDateString, IsOptional, IsNumber, IsIn, Min, Max } from 'class-validator';
-import type { ValidationResult, AvailabilityEntityType, AvailabilityType, AvailabilityHardness } from '../interfaces/types.js';
+import {
+    IsDateString,
+    IsIn,
+    IsNotEmpty,
+    IsNumber,
+    IsOptional,
+    IsString,
+    Max,
+    Min,
+} from 'class-validator';
+import type {
+    AvailabilityEntityType,
+    AvailabilityHardness,
+    AvailabilityType,
+    ValidationResult,
+} from '../interfaces/types.js';
 
 export class CreateAvailabilityDto {
     @IsString()
@@ -52,7 +66,11 @@ export class CreateAvailabilityDto {
         const d = data as Record<string, unknown>;
 
         if (!d.entityType || !['instructor', 'room'].includes(d.entityType as string)) {
-            errors.push({ field: 'entityType', message: 'entityType must be instructor or room', value: d.entityType });
+            errors.push({
+                field: 'entityType',
+                message: 'entityType must be instructor or room',
+                value: d.entityType,
+            });
         }
 
         if (!d.entityId || typeof d.entityId !== 'string') {
@@ -60,7 +78,11 @@ export class CreateAvailabilityDto {
         }
 
         if (!d.startTime) {
-            errors.push({ field: 'startTime', message: 'startTime is required', value: d.startTime });
+            errors.push({
+                field: 'startTime',
+                message: 'startTime is required',
+                value: d.startTime,
+            });
         }
 
         if (!d.endTime) {
@@ -68,11 +90,19 @@ export class CreateAvailabilityDto {
         }
 
         if (!d.type || !['available', 'blocked', 'preferred'].includes(d.type as string)) {
-            errors.push({ field: 'type', message: 'type must be available, blocked, or preferred', value: d.type });
+            errors.push({
+                field: 'type',
+                message: 'type must be available, blocked, or preferred',
+                value: d.type,
+            });
         }
 
         if (!d.hardness || !['hard', 'soft'].includes(d.hardness as string)) {
-            errors.push({ field: 'hardness', message: 'hardness must be hard or soft', value: d.hardness });
+            errors.push({
+                field: 'hardness',
+                message: 'hardness must be hard or soft',
+                value: d.hardness,
+            });
         }
 
         return { valid: errors.length === 0, errors };

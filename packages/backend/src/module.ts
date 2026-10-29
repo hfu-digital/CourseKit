@@ -1,28 +1,25 @@
 import { type DynamicModule, Module, type Provider } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
-
-// Storage interfaces
-import { TimetableEventStorage } from './interfaces/event-storage.interface.js';
-import { RoomStorage } from './interfaces/room-storage.interface.js';
-import { InstructorStorage } from './interfaces/instructor-storage.interface.js';
-import { GroupStorage } from './interfaces/group-storage.interface.js';
-import { AvailabilityStorage } from './interfaces/availability-storage.interface.js';
-import { AcademicPeriodStorage } from './interfaces/period-storage.interface.js';
-import { CourseStorage } from './interfaces/course-storage.interface.js';
-import { LocationDistanceStorage } from './interfaces/location-distance-storage.interface.js';
-import type { ScheduleConstraint } from './interfaces/constraint.interface.js';
-
-// Domain services
-import { RecurrenceService } from './domain/recurrence.service.js';
-import { TimeService } from './domain/time.service.js';
+import { AvailabilityConstraint } from './constraints/availability.constraint.js';
+import { CapacityConstraint } from './constraints/capacity.constraint.js';
+// Built-in constraints
+import { OverlapConstraint } from './constraints/overlap.constraint.js';
 import { AvailabilityService } from './domain/availability.service.js';
 import { ConflictService } from './domain/conflict.service.js';
 import { QueryService } from './domain/query.service.js';
-
-// Built-in constraints
-import { OverlapConstraint } from './constraints/overlap.constraint.js';
-import { CapacityConstraint } from './constraints/capacity.constraint.js';
-import { AvailabilityConstraint } from './constraints/availability.constraint.js';
+// Domain services
+import { RecurrenceService } from './domain/recurrence.service.js';
+import { TimeService } from './domain/time.service.js';
+import { AvailabilityStorage } from './interfaces/availability-storage.interface.js';
+import type { ScheduleConstraint } from './interfaces/constraint.interface.js';
+import { CourseStorage } from './interfaces/course-storage.interface.js';
+// Storage interfaces
+import { TimetableEventStorage } from './interfaces/event-storage.interface.js';
+import { GroupStorage } from './interfaces/group-storage.interface.js';
+import { InstructorStorage } from './interfaces/instructor-storage.interface.js';
+import { LocationDistanceStorage } from './interfaces/location-distance-storage.interface.js';
+import { AcademicPeriodStorage } from './interfaces/period-storage.interface.js';
+import { RoomStorage } from './interfaces/room-storage.interface.js';
 
 export interface CourseKitModuleOptions {
     eventStorage: TimetableEventStorage;
