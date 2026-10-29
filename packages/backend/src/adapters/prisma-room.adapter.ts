@@ -14,6 +14,10 @@ export class PrismaRoomAdapter extends RoomStorage {
         super();
     }
 
+    async findByIds(ids: string[]): Promise<Room[]> {
+        return ids.length ? this.delegate.findMany({ where: { id: { in: ids } } }) : [];
+    }
+
     async create(data: Omit<Room, 'id'>): Promise<Room> {
         return this.delegate.create({ data });
     }

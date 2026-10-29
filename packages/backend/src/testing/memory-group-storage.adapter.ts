@@ -6,6 +6,11 @@ export class InMemoryGroupStorage extends GroupStorage {
     private groups = new Map<string, Group>();
     private studentGroups = new Map<string, StudentGroup>();
 
+    async findStudentsBatch(ids: string[]): Promise<StudentGroup[]> {
+        const keys = new Set(ids);
+        return [...this.studentGroups.values()].filter(row => keys.has(row.groupId));
+    }
+
     async create(data: Omit<Group, 'id'>): Promise<Group> {
         const group: Group = { ...data, id: crypto.randomUUID() };
         this.groups.set(group.id, group);

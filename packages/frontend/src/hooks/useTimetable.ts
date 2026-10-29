@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { LatestRequest } from './latest-request.js';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useCourseKitConfig } from '../context/CourseKitProvider.js';
 
 export interface TimetableQuery {
@@ -44,13 +45,16 @@ export function useTimetable(query: TimetableQuery | null): UseTimetableResult {
     const { apiUrl, fetch: customFetch } = useCourseKitConfig();
     const fetchFn = customFetch ?? globalThis.fetch;
 
+    const requests = useRef(new LatestRequest());
+    useEffect(() => () => requests.current.cancel(), [apiUrl, fetchFn]);
     const [data, setData] = useState<TimetableOccurrence[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
     const fetchData = useCallback(async () => {
-        if (!query) return;
+        if (!query) { requests.current.cancel(); setLoading(false); return; }
 
+        const signal = requests.current.begin();
         setLoading(true);
         setError(null);
 
@@ -65,22 +69,25 @@ export function useTimetable(query: TimetableQuery | null): UseTimetableResult {
             if (query.courseIds?.length) params.set('courseIds', query.courseIds.join(','));
             if (query.periodId) params.set('periodId', query.periodId);
 
-            const response = await fetchFn(`${apiUrl}/schedule?${params.toString()}`);
+            const response = await fetchFn(`${apiUrl}/schedule?${params.toString()}`, { signal });
             if (!response.ok) {
                 throw new Error(`Failed to fetch timetable: ${response.status}`);
             }
 
             const result = await response.json();
+            if (signal.aborted) return;
             setData(result);
         } catch (err) {
+            if (signal.aborted) return;
             setError(err instanceof Error ? err : new Error(String(err)));
         } finally {
-            setLoading(false);
+            if (!signal.aborted) setLoading(false);
         }
     }, [apiUrl, fetchFn, query ? JSON.stringify(query) : null]);
 
     useEffect(() => {
         fetchData();
+        return () => requests.current.cancel();
     }, [fetchData]);
 
     return { data, loading, error, refetch: fetchData };

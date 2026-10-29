@@ -1,4 +1,5 @@
-import { useCallback, useState } from 'react';
+import { LatestRequest } from './latest-request.js';
+import { useCallback, useState, useRef, useEffect } from 'react';
 import { useCourseKitConfig } from '../context/CourseKitProvider.js';
 
 export interface ProposedEvent {
@@ -41,6 +42,8 @@ export function useConflictCheck(): UseConflictCheckResult {
     const { apiUrl, fetch: customFetch } = useCourseKitConfig();
     const fetchFn = customFetch ?? globalThis.fetch;
 
+    const requests = useRef(new LatestRequest());
+    useEffect(() => () => requests.current.cancel(), [apiUrl, fetchFn]);
     const [result, setResult] = useState<ConflictCheckResult | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
@@ -50,12 +53,14 @@ export function useConflictCheck(): UseConflictCheckResult {
             event: ProposedEvent,
             dateRange: { start: string; end: string },
         ): Promise<ConflictCheckResult | null> => {
+            const signal = requests.current.begin();
             setLoading(true);
             setError(null);
 
             try {
                 const response = await fetchFn(`${apiUrl}/conflicts/check`, {
                     method: 'POST',
+                    signal,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ event, dateRange }),
                 });
@@ -65,14 +70,16 @@ export function useConflictCheck(): UseConflictCheckResult {
                 }
 
                 const data = await response.json();
+                if (signal.aborted) return null;
                 setResult(data);
                 return data;
             } catch (err) {
+                if (signal.aborted) return null;
                 const error = err instanceof Error ? err : new Error(String(err));
                 setError(error);
                 return null;
             } finally {
-                setLoading(false);
+                if (!signal.aborted) setLoading(false);
             }
         },
         [apiUrl, fetchFn],

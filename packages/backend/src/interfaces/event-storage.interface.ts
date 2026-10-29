@@ -19,6 +19,12 @@ export abstract class TimetableEventStorage {
     ): Promise<TimetableEvent>;
     abstract delete(id: string): Promise<void>;
 
+    findExceptionsBatch?(eventIds: string[]): Promise<EventException[]>;
+
+    findInstructorsBatch?(eventIds: string[]): Promise<EventInstructor[]>;
+
+    findGroupsBatch?(eventIds: string[]): Promise<EventGroup[]>;
+
     // Exception management
     abstract createException(data: Omit<EventException, 'id'>): Promise<EventException>;
     abstract findExceptions(eventId: string): Promise<EventException[]>;

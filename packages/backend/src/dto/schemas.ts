@@ -10,7 +10,7 @@
  * `zod` is a devDependency only.
  */
 
-import { z } from 'zod';
+import { z } from 'zod/v4';
 
 const isoDateTimeSchema = z
     .string()

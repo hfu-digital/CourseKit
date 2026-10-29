@@ -1,6 +1,8 @@
 import type { Group, StudentGroup } from './types.js';
 
 export abstract class GroupStorage {
+    findStudentsBatch?(ids: string[]): Promise<StudentGroup[]>;
+
     abstract create(data: Omit<Group, 'id'>): Promise<Group>;
     abstract findById(id: string): Promise<Group | null>;
     abstract findAll(filters?: { type?: Group['type'] }): Promise<Group[]>;

@@ -10,7 +10,12 @@
  * without depending on the backend package directly.
  */
 
-import { rrulestr } from 'rrule';
+import * as rruleModule from 'rrule';
+
+// rrule publishes CommonJS: Node ESM exposes its implementation under default,
+// while bundlers may expose the named exports directly.
+const rruleNamespace = ((rruleModule as unknown as { default?: typeof rruleModule }).default ?? rruleModule);
+const { rrulestr } = rruleNamespace;
 
 export interface NormalizedRecurrence {
     /** Original RRULE string from VEVENT (trimmed). */

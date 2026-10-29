@@ -16,6 +16,10 @@ export class PrismaAvailabilityAdapter extends AvailabilityStorage {
         super();
     }
 
+    async findByEntities(entities: { entityType: AvailabilityEntityType; entityId: string }[]): Promise<Availability[]> {
+        return entities.length ? this.delegate.findMany({ where: { OR: entities } }) : [];
+    }
+
     async create(data: Omit<Availability, 'id'>): Promise<Availability> {
         return this.delegate.create({ data });
     }

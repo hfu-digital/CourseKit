@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { LatestRequest } from './latest-request.js';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useCourseKitConfig } from '../context/CourseKitProvider.js';
 
 export interface RoomSearchQuery {
@@ -28,12 +29,15 @@ export function useRoomSearch(initialQuery?: RoomSearchQuery): UseRoomSearchResu
     const { apiUrl, fetch: customFetch } = useCourseKitConfig();
     const fetchFn = customFetch ?? globalThis.fetch;
 
+    const requests = useRef(new LatestRequest());
+    useEffect(() => () => requests.current.cancel(), [apiUrl, fetchFn]);
     const [rooms, setRooms] = useState<RoomResult[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
     const search = useCallback(
         async (query: RoomSearchQuery) => {
+            const signal = requests.current.begin();
             setLoading(true);
             setError(null);
 
@@ -48,17 +52,19 @@ export function useRoomSearch(initialQuery?: RoomSearchQuery): UseRoomSearchResu
                     params.set('availableEnd', query.availableAt.end);
                 }
 
-                const response = await fetchFn(`${apiUrl}/rooms?${params.toString()}`);
+                const response = await fetchFn(`${apiUrl}/rooms?${params.toString()}`, { signal });
                 if (!response.ok) {
                     throw new Error(`Room search failed: ${response.status}`);
                 }
 
                 const data = await response.json();
+                if (signal.aborted) return;
                 setRooms(data);
             } catch (err) {
+                if (signal.aborted) return;
                 setError(err instanceof Error ? err : new Error(String(err)));
             } finally {
-                setLoading(false);
+                if (!signal.aborted) setLoading(false);
             }
         },
         [apiUrl, fetchFn],
@@ -68,7 +74,8 @@ export function useRoomSearch(initialQuery?: RoomSearchQuery): UseRoomSearchResu
         if (initialQuery) {
             search(initialQuery);
         }
-    }, [search, initialQuery]);
+        return () => requests.current.cancel();
+    }, [search, initialQuery ? JSON.stringify(initialQuery) : null]);
 
     return { rooms, loading, error, search };
 }

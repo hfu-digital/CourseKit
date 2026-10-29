@@ -1,21 +1,21 @@
 {
-    "name": "@hfu.digital/coursekit-example-nestjs-basic",
-    "version": "0.0.0",
-    "private": true,
-    "type": "module",
-    "scripts": {
-        "start": "bun run src/main.ts",
-        "build": "echo 'No build step for example'"
-    },
-    "dependencies": {
-        "@hfu.digital/coursekit-nestjs": "workspace:*",
-        "@nestjs/common": "^11.0.0",
-        "@nestjs/core": "^11.0.0",
-        "@nestjs/event-emitter": "^3.0.0",
-        "@nestjs/platform-express": "^11.0.0",
-        "rxjs": "^7.0.0",
-        "class-validator": "^0.14.0",
-        "class-transformer": "^0.5.0",
-        "reflect-metadata": "^0.2.0"
-    }
+  "name": "@hfu.digital/coursekit-example-nestjs-basic",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/main.ts",
+    "build": "echo 'No build step for example'"
+  },
+  "dependencies": {
+    "@hfu.digital/coursekit-nestjs": "workspace:*",
+    "@nestjs/common": "^11.2.8",
+    "@nestjs/core": "^11.2.8",
+    "@nestjs/event-emitter": "^3.0.0",
+    "@nestjs/platform-express": "^11.2.8",
+    "rxjs": "^7.0.0",
+    "class-validator": "^0.14.0",
+    "class-transformer": "^0.5.0",
+    "reflect-metadata": "^0.2.0"
+  }
 }

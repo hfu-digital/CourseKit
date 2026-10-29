@@ -50,6 +50,18 @@ export class PrismaTimetableEventAdapter extends TimetableEventStorage {
         super();
     }
 
+    async findExceptionsBatch(eventIds: string[]): Promise<EventException[]> {
+        return eventIds.length ? this.exceptionDelegate.findMany({ where: { eventId: { in: eventIds } } }) : [];
+    }
+
+    async findInstructorsBatch(eventIds: string[]): Promise<EventInstructor[]> {
+        return eventIds.length ? this.instructorDelegate.findMany({ where: { eventId: { in: eventIds } } }) : [];
+    }
+
+    async findGroupsBatch(eventIds: string[]): Promise<EventGroup[]> {
+        return eventIds.length ? this.groupDelegate.findMany({ where: { eventId: { in: eventIds } } }) : [];
+    }
+
     async create(
         data: Omit<TimetableEvent, 'id' | 'createdAt' | 'updatedAt' | 'version'>,
     ): Promise<TimetableEvent> {

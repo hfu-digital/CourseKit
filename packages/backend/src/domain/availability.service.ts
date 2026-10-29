@@ -19,6 +19,31 @@ export class AvailabilityService {
         private readonly eventEmitter: EventEmitter2,
     ) {}
 
+    createChecker(entities: { entityType: AvailabilityEntityType; entityId: string }[] = []) {
+        const keys = new Map(entities.map(e => [JSON.stringify([e.entityType, e.entityId]), e]));
+        let snapshot: Promise<Availability[]> | undefined;
+        const results = new Map<string, ReturnType<AvailabilityService['isAvailable']>>();
+        return async (type: AvailabilityEntityType, id: string, start: Date, duration: number) => {
+            const key = JSON.stringify([type, id, start.getTime(), duration]);
+            if (!results.has(key)) {
+                results.set(key, (async () => {
+                    if (!this.storage.findByEntities) return this.isAvailable(type, id, start, duration);
+                    snapshot ??= (async () => {
+                        const rows: Availability[] = [];
+                        const list = [...keys.values()];
+                        for (let i = 0; i < list.length; i += 200) rows.push(...await this.storage.findByEntities!(list.slice(i, i + 200)));
+                        return rows;
+                    })();
+                    if (!keys.has(JSON.stringify([type, id]))) return this.isAvailable(type, id, start, duration);
+                    const end = new Date(start.getTime() + duration * 60_000);
+                    const relevant = (await snapshot).filter(r => r.entityType === type && r.entityId === id && (!r.specificDate || (r.specificDate >= start && r.specificDate <= end)));
+                    return this.evaluateRules(relevant, start, end);
+                })());
+            }
+            return results.get(key)!;
+        };
+    }
+
     async create(data: Omit<Availability, 'id'>): Promise<Availability> {
         const availability = await this.storage.create(data);
         this.eventEmitter.emit(DOMAIN_EVENTS.AVAILABILITY_CREATED, { availability });
@@ -58,6 +83,10 @@ export class AvailabilityService {
         const dateRange: DateRange = { start, end };
 
         const rules = await this.storage.findByEntityInRange(entityType, entityId, dateRange);
+        return this.evaluateRules(rules, start, end);
+    }
+
+    private evaluateRules(rules: Availability[], start: Date, end: Date): { available: boolean; conflicts: Availability[] } {
         const conflicts: Availability[] = [];
 
         for (const rule of rules) {

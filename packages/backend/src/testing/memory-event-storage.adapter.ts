@@ -14,6 +14,21 @@ export class InMemoryTimetableEventStorage extends TimetableEventStorage {
     private instructors = new Map<string, EventInstructor>();
     private groups = new Map<string, EventGroup>();
 
+    async findExceptionsBatch(eventIds: string[]): Promise<EventException[]> {
+        const ids = new Set(eventIds);
+        return [...this.exceptions.values()].filter(row => ids.has(row.eventId));
+    }
+
+    async findInstructorsBatch(eventIds: string[]): Promise<EventInstructor[]> {
+        const ids = new Set(eventIds);
+        return [...this.instructors.values()].filter(row => ids.has(row.eventId));
+    }
+
+    async findGroupsBatch(eventIds: string[]): Promise<EventGroup[]> {
+        const ids = new Set(eventIds);
+        return [...this.groups.values()].filter(row => ids.has(row.eventId));
+    }
+
     async create(
         data: Omit<TimetableEvent, 'id' | 'createdAt' | 'updatedAt' | 'version'>,
     ): Promise<TimetableEvent> {

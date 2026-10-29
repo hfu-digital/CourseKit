@@ -5,6 +5,11 @@ import type { Room } from '../interfaces/types.js';
 export class InMemoryRoomStorage extends RoomStorage {
     private rooms = new Map<string, Room>();
 
+    async findByIds(ids: string[]): Promise<Room[]> {
+        const keys = new Set(ids);
+        return [...this.rooms.values()].filter(row => keys.has(row.id));
+    }
+
     async create(data: Omit<Room, 'id'>): Promise<Room> {
         const room: Room = { ...data, id: crypto.randomUUID() };
         this.rooms.set(room.id, room);

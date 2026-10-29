@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { LatestRequest } from './latest-request.js';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useCourseKitConfig } from '../context/CourseKitProvider.js';
 
 export type ChangeAction = 'created' | 'updated' | 'deleted';
@@ -48,12 +49,15 @@ export function useChanges(query: ChangesQuery | null): UseChangesResult {
     const { apiUrl, fetch: customFetch } = useCourseKitConfig();
     const fetchFn = customFetch ?? globalThis.fetch;
 
+    const requests = useRef(new LatestRequest());
+    useEffect(() => () => requests.current.cancel(), [apiUrl, fetchFn]);
     const [data, setData] = useState<ChangeRecord[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
     const fetchData = useCallback(async () => {
-        if (!query) return;
+        if (!query) { requests.current.cancel(); setLoading(false); return; }
+        const signal = requests.current.begin();
         setLoading(true);
         setError(null);
         try {
@@ -65,21 +69,24 @@ export function useChanges(query: ChangesQuery | null): UseChangesResult {
             if (query.scope) params.set('scope', query.scope);
             if (query.limit !== undefined) params.set('limit', String(query.limit));
 
-            const response = await fetchFn(`${apiUrl}/changes?${params.toString()}`);
+            const response = await fetchFn(`${apiUrl}/changes?${params.toString()}`, { signal });
             if (!response.ok) {
                 throw new Error(`Failed to fetch changes: ${response.status}`);
             }
             const result = (await response.json()) as ChangeRecord[] | { data: ChangeRecord[] };
+            if (signal.aborted) return;
             setData(Array.isArray(result) ? result : result.data);
         } catch (err) {
+            if (signal.aborted) return;
             setError(err instanceof Error ? err : new Error(String(err)));
         } finally {
-            setLoading(false);
+            if (!signal.aborted) setLoading(false);
         }
     }, [apiUrl, fetchFn, query ? JSON.stringify(query) : null]);
 
     useEffect(() => {
         fetchData();
+        return () => requests.current.cancel();
     }, [fetchData]);
 
     return { data, loading, error, refetch: fetchData };

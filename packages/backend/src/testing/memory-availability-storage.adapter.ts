@@ -5,6 +5,11 @@ import type { Availability, AvailabilityEntityType, DateRange } from '../interfa
 export class InMemoryAvailabilityStorage extends AvailabilityStorage {
     private items = new Map<string, Availability>();
 
+    async findByEntities(entities: { entityType: AvailabilityEntityType; entityId: string }[]): Promise<Availability[]> {
+        const keys = new Set(entities.map(e => JSON.stringify([e.entityType, e.entityId])));
+        return [...this.items.values()].filter(r => keys.has(JSON.stringify([r.entityType, r.entityId])));
+    }
+
     async create(data: Omit<Availability, 'id'>): Promise<Availability> {
         const item: Availability = { ...data, id: crypto.randomUUID(), version: 0 };
         this.items.set(item.id, item);

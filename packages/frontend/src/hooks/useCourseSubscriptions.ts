@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { LatestRequest } from './latest-request.js';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useCourseKitConfig } from '../context/CourseKitProvider.js';
 
 export interface CourseSubscriptionVariant {
@@ -52,24 +53,29 @@ export function useCourseSubscriptions(): UseCourseSubscriptionsResult {
     const { apiUrl, fetch: customFetch } = useCourseKitConfig();
     const fetchFn = customFetch ?? globalThis.fetch;
 
+    const requests = useRef(new LatestRequest());
+    useEffect(() => () => requests.current.cancel(), [apiUrl, fetchFn]);
     const [data, setData] = useState<CourseSubscription[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
     const fetchData = useCallback(async () => {
+        const signal = requests.current.begin();
         setLoading(true);
         setError(null);
         try {
-            const response = await fetchFn(`${apiUrl}/me/courses`);
+            const response = await fetchFn(`${apiUrl}/me/courses`, { signal });
             if (!response.ok) {
                 throw new Error(`Failed to fetch subscriptions: ${response.status}`);
             }
             const result = (await response.json()) as CourseSubscription[];
+            if (signal.aborted) return;
             setData(result);
         } catch (err) {
+            if (signal.aborted) return;
             setError(err instanceof Error ? err : new Error(String(err)));
         } finally {
-            setLoading(false);
+            if (!signal.aborted) setLoading(false);
         }
     }, [apiUrl, fetchFn]);
 
@@ -120,6 +126,7 @@ export function useCourseSubscriptions(): UseCourseSubscriptionsResult {
 
     useEffect(() => {
         fetchData();
+        return () => requests.current.cancel();
     }, [fetchData]);
 
     return {

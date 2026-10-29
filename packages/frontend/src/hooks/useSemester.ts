@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { LatestRequest } from './latest-request.js';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { useCourseKitConfig } from '../context/CourseKitProvider.js';
 
 export interface Semester {
@@ -37,16 +38,19 @@ export function useSemester(): UseSemesterResult {
     const { apiUrl, fetch: customFetch } = useCourseKitConfig();
     const fetchFn = customFetch ?? globalThis.fetch;
 
+    const requests = useRef(new LatestRequest());
+    useEffect(() => () => requests.current.cancel(), [apiUrl, fetchFn]);
     const [current, setCurrentState] = useState<Semester | null>(null);
     const [available, setAvailable] = useState<Semester[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<Error | null>(null);
 
     const fetchData = useCallback(async () => {
+        const signal = requests.current.begin();
         setLoading(true);
         setError(null);
         try {
-            const response = await fetchFn(`${apiUrl}/me/semester`);
+            const response = await fetchFn(`${apiUrl}/me/semester`, { signal });
             if (!response.ok) {
                 throw new Error(`Failed to fetch semester: ${response.status}`);
             }
@@ -54,12 +58,14 @@ export function useSemester(): UseSemesterResult {
                 current: Semester | null;
                 available: Semester[];
             };
+            if (signal.aborted) return;
             setCurrentState(result.current);
             setAvailable(result.available);
         } catch (err) {
+            if (signal.aborted) return;
             setError(err instanceof Error ? err : new Error(String(err)));
         } finally {
-            setLoading(false);
+            if (!signal.aborted) setLoading(false);
         }
     }, [apiUrl, fetchFn]);
 
@@ -80,6 +86,7 @@ export function useSemester(): UseSemesterResult {
 
     useEffect(() => {
         fetchData();
+        return () => requests.current.cancel();
     }, [fetchData]);
 
     return { current, available, loading, error, setCurrent, refetch: fetchData };
